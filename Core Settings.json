@@ -1,0 +1,10 @@
+{
+	"archive_handlers": {
+		".zip": "zip://",
+		".zipx": "zip://",
+		".jar": "zip://",
+		".xpi": "zip://",
+		".7z": "7z://",
+		".tar": "tar://"
+	}
+}

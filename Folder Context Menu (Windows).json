@@ -1,0 +1,8 @@
+[
+	{ "caption": "-", "id": "clipboard" },
+	{ "command": "paste", "caption": "&Paste" },
+	{ "caption": "-", "id": "new" },
+	{ "command": "create_directory", "caption": "New &Folder" },
+	{ "caption": "-", "id": "properties" },
+	{ "command": "show_explorer_properties", "caption": "P&roperties" }
+]

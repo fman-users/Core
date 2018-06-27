@@ -1,0 +1,6 @@
+[
+	{ "caption": "-", "id": "new" },
+	{ "command": "create_directory", "caption": "New &Folder" },
+	{ "caption": "-", "id": "clipboard" },
+	{ "command": "paste", "caption": "&Paste" }
+]

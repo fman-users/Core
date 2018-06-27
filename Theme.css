@@ -1,0 +1,40 @@
+* {
+	font-size: 9pt;
+}
+
+th {
+	font-size: 8pt;
+}
+
+.statusbar {
+	font-size: 8pt;
+}
+
+.quicksearch-query, .quicksearch-item-title {
+	font-size: 10pt;
+}
+
+.quicksearch-item {
+	padding-top: 1px;
+	padding-left: 4px;
+	padding-right: 4px;
+	border-top: 1px solid #4d4d4d;
+	border-bottom: 1px solid #363636;
+}
+
+.quicksearch-item-title {
+	color: #c8c8c8;
+}
+
+.quicksearch-item-title-highlight {
+	color: white;
+}
+
+.quicksearch-item-hint {
+	font-size: 8pt;
+	color: white;
+}
+
+.quicksearch-item-description {
+	color: #8f908a;
+}

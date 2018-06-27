@@ -1,0 +1,19 @@
+[{
+	"on_file": [
+		{ "command": "open_selected_files", "caption": "&Open" },
+		{ "command": "open_with", "caption": "Open wit&h..." },
+		{ "caption": "-" },
+		{ "command": "cut", "caption": "Cu&t" },
+		{ "command": "copy_to_clipboard", "caption": "&Copy" },
+		{ "caption": "-" },
+		{ "command": "rename", "caption": "Rena&me" },
+		{ "command": "move_to_trash", "caption": "Mo&ve to Trash" },
+		{ "caption": "-" },
+		{ "command": "pack", "caption": "Com&press..." }
+	],
+	"in_directory": [
+		{ "command": "create_directory", "caption": "New &Folder" },
+		{ "caption": "-" },
+		{ "command": "paste", "caption": "&Paste" }
+	]
+}]

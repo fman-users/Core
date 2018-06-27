@@ -1,0 +1,23 @@
+[{
+	"on_file": [
+		{ "command": "open_selected_files", "caption": "&Open" },
+		{ "command": "open_with", "caption": "Open wit&h..." },
+		{ "caption": "-" },
+		{ "command": "cut", "caption": "Cu&t" },
+		{ "command": "copy_to_clipboard", "caption": "&Copy" },
+		{ "caption": "-" },
+		{ "command": "move_to_trash", "caption": "&Delete" },
+		{ "command": "rename", "caption": "Rena&me" },
+		{ "caption": "-" },
+		{ "command": "pack", "caption": "Add to archive..." },
+		{ "caption": "-" },
+		{ "command": "show_explorer_properties", "caption": "P&roperties" }
+	],
+	"in_directory": [
+		{ "command": "paste", "caption": "&Paste" },
+		{ "caption": "-" },
+		{ "command": "create_directory", "caption": "New &Folder" },
+		{ "caption": "-" },
+		{ "command": "show_explorer_properties", "caption": "P&roperties" }
+	]
+}]

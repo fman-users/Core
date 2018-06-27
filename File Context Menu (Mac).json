@@ -1,0 +1,13 @@
+[
+	{ "caption": "-", "id": "open" },
+	{ "command": "open_selected_files", "caption": "Open" },
+	{ "command": "open_with" },
+	{ "caption": "-", "id": "file_operations" },
+	{ "command": "move_to_trash", "caption": "Move to Trash" },
+	{ "command": "rename" },
+	{ "caption": "-" },
+	{ "command": "get_info", "id": "properties" },
+	{ "command": "pack", "caption": "Compress...", "id": "archive" },
+	{ "caption": "-", "id": "clipboard" },
+	{ "command": "copy_to_clipboard", "caption": "Copy" }
+]

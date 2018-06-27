@@ -1,0 +1,22 @@
+[
+	{ "keys": ["Ctrl+Right"], "command": "open_in_right_pane" },
+	{ "keys": ["Ctrl+Left"], "command": "open_in_left_pane" },
+	{ "keys": ["Ins"], "command": "move_cursor_down", "args": {"toggle_selection": true} },
+	{ "keys": ["Ctrl+C"], "command": "copy_to_clipboard" },
+	{ "keys": ["Ctrl+X"], "command": "cut" },
+	{ "keys": ["Ctrl+V"], "command": "paste" },
+	{ "keys": ["Ctrl+A"], "command": "select_all" },
+	{ "keys": ["Ctrl+D"], "command": "deselect" },
+	{ "keys": ["Ctrl+."], "command": "toggle_hidden_files" },
+	{ "keys": ["Ctrl+P"], "command": "go_to" },
+	{ "keys": ["Ctrl+Shift+P"], "command": "command_palette" },
+	{ "keys": ["Alt+Left"], "command": "go_back" },
+	{ "keys": ["Alt+Right"], "command": "go_forward" },
+	{ "keys": ["Alt+F5"], "command": "pack" },
+	{ "keys": ["Ctrl+R"], "command": "reload"},
+	{ "keys": ["Ctrl+F1"], "command": "sort_by_column", "args": {"column_index": 0}},
+	{ "keys": ["Ctrl+F2"], "command": "sort_by_column", "args": {"column_index": 1}},
+	{ "keys": ["Ctrl+F3"], "command": "sort_by_column", "args": {"column_index": 2}},
+	{ "keys": ["Alt+Up"], "command": "go_up" },
+	{ "keys": ["Alt+Enter"], "command": "show_explorer_properties" }
+]
