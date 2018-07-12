@@ -1,6 +1,14 @@
 # Core
 This repository contains the source code of [fman](https://fman.io)'s Core plugin. It uses fman's [plugin API](https://fman.io/docs/api) to implement virtually all basic features, such as copying files, navigating to a folder etc. fman "eats its own dog food" in this way to ensure that the API is stable and powerful enough for real world use.
 
+## Examples
+
+* [Key Bindings.json](Key%20Bindings.json) defines the default key bindings
+* [Theme.css](Theme.css) defines fman's visual appearance (to [some extent](https://github.com/fman-users/fman/issues/45))
+* [commands/](core/commands/__init__.py) implements virtually all commands
+* [local/](core/fs/local/__init__.py) lets fman work with the files on your local hard drive
+* [zip.py](core/fs/zip.py) adds support for ZIP files
+
 ## License
 This repository is made public for educational purposes only. You may only use it to implement plugins for [fman](https://fman.io). You are not allowed to use any parts of this code for other projects, in particular to implement other file managers.
 
