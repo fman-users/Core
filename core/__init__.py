@@ -84,7 +84,7 @@ class Size(Column):
 	def _get_size(self, url):
 		return self._fs.query(url, 'size_bytes')
 
-# Define here so get_default_columns(...) can reference it as core.Size:
+# Define here so get_default_columns(...) can reference it as core.Modified:
 class Modified(Column):
 	def __init__(self, fs=fman.fs):
 		super().__init__()

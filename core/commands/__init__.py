@@ -6,8 +6,8 @@ from core.util import strformat_dict_values, listdir_absolute, is_parent
 from core.quicksearch_matchers import path_starts_with, basename_starts_with, \
 	contains_chars, contains_chars_after_separator
 from fman import *
-from fman.fs import exists, touch, mkdir, is_dir, move, move_to_trash, delete, \
-	samefile, copy, iterdir, resolve
+from fman.fs import exists, touch, mkdir, is_dir, delete, samefile, copy, \
+	iterdir, resolve, prepare_copy, prepare_move, prepare_delete, prepare_trash
 from fman.url import splitscheme, as_url, join, basename, as_human_readable, \
 	dirname
 from getpass import getuser
@@ -20,6 +20,7 @@ from PyQt5.QtCore import QFileInfo, QUrl
 from PyQt5.QtGui import QDesktopServices
 from subprocess import Popen, DEVNULL, PIPE
 from tempfile import TemporaryDirectory
+from urllib.error import URLError
 
 import fman
 import fman.fs
@@ -90,52 +91,13 @@ class MoveToTrash(DirectoryPaneCommand):
 		if not urls:
 			show_alert('No file is selected!')
 			return
-		if len(urls) > 1:
-			description = 'these %d items' % len(urls)
-		else:
-			description = as_human_readable(urls[0])
+		description = _describe(urls, 'these %d files')
 		trash = 'Recycle Bin' if PLATFORM == 'Windows' else 'Trash'
 		msg = "Do you really want to move %s to the %s?" % (description, trash)
-		_delete(urls, msg, move_to_trash, delete)
+		if show_alert(msg, YES | NO, YES) & YES:
+			submit_task(_Delete(urls, prepare_trash, prepare_delete))
 	def is_visible(self):
 		return bool(self.pane.get_file_under_cursor())
-
-def _delete(urls, message, delete_fn, fallback=None):
-	choice = show_alert(message, YES | NO, YES)
-	if not choice & YES:
-		return
-	ignore_errors = False
-	for i, url in enumerate(urls):
-		try:
-			try:
-				delete_fn(url)
-			except UnsupportedOperation:
-				if fallback is None:
-					raise
-				fallback(url)
-		except FileNotFoundError:
-			# Perhaps the file has already been deleted.
-			pass
-		except OSError as e:
-			if ignore_errors:
-				continue
-			message = 'Could not delete ' + basename(url)
-			reason = e.strerror or ''
-			if not reason and e.errno is not None:
-				reason = strerror(e.errno)
-			if reason:
-				message += ': ' + reason
-			message += '.'
-			is_last = i == len(urls) - 1
-			if is_last:
-				show_alert(message)
-			else:
-				message += ' Do you want to continue?'
-				choice = show_alert(message, YES | NO | YES_TO_ALL)
-				if choice & NO:
-					break
-				if choice & YES_TO_ALL:
-					ignore_errors = True
 
 class DeletePermanently(DirectoryPaneCommand):
 	def __call__(self, urls=None):
@@ -144,14 +106,84 @@ class DeletePermanently(DirectoryPaneCommand):
 		if not urls:
 			show_alert('No file is selected!')
 			return
-		if len(urls) > 1:
-			description = 'these %d items' % len(urls)
-		else:
-			description = as_human_readable(urls[0])
+		description = _describe(urls, 'these %d items')
 		message = \
 			"Do you really want to PERMANENTLY delete %s? This action cannot " \
 			"be undone!" % description
-		_delete(urls, message, delete)
+		if show_alert(message, YES | NO, YES) & YES:
+			submit_task(_Delete(urls, prepare_delete))
+
+class _Delete(Task):
+	def __init__(self, urls, prepare_fn, fallback=None):
+		super().__init__('Deleting ' + _describe(urls))
+		self._urls = urls
+		self._num_urls_prepared = 0
+		self._prepare_fn = prepare_fn
+		self._fallback = fallback
+		self._tasks = []
+	def __call__(self):
+		try:
+			self._gather_tasks()
+		except (UnsupportedOperation, NotImplementedError):
+			failing_url = self._urls[self._num_urls_prepared]
+			self.show_alert(
+				'Deleting files in %s is not supported.'
+				% splitscheme(failing_url)[0]
+			)
+			return
+		ignore_errors = False
+		for i, task in enumerate(self._tasks):
+			self.check_canceled()
+			try:
+				self.run(task)
+			except FileNotFoundError:
+				# Perhaps the file has already been deleted.
+				pass
+			except OSError as e:
+				if ignore_errors:
+					continue
+				text = task.get_title()
+				message = 'Error ' + text[0].lower() + text[1:]
+				reason = e.strerror or ''
+				if not reason and e.errno is not None:
+					reason = strerror(e.errno)
+				if reason:
+					message += ': ' + reason
+				message += '.'
+				is_last = i == len(self._tasks) - 1
+				if is_last:
+					self.show_alert(message)
+				else:
+					message += ' Do you want to continue?'
+					choice = show_alert(message, YES | NO | YES_TO_ALL)
+					if choice & NO:
+						break
+					if choice & YES_TO_ALL:
+						ignore_errors = True
+	def _gather_tasks(self):
+		for url in self._urls:
+			try:
+				self._prepare(url, self._prepare_fn)
+			except (NotImplementedError, UnsupportedOperation):
+				if self._fallback is None:
+					raise
+				self._prepare(url, self._fallback)
+			self._num_urls_prepared += 1
+		self.set_size(sum(t.get_size() for t in self._tasks))
+	def _prepare(self, url, prepare_fn):
+		url_tasks = []
+		for task in prepare_fn(url):
+			self.check_canceled()
+			url_tasks.append(task)
+			if task.get_size():
+				num = len(self._tasks) + len(url_tasks)
+				self.set_text('Preparing to delete {:,} files.'.format(num))
+		self._tasks.extend(url_tasks)
+
+def _describe(files, template='%d files'):
+	if len(files) == 1:
+		return basename(files[0])
+	return template % len(files)
 
 class GoUp(DirectoryPaneCommand):
 
@@ -400,7 +432,17 @@ class CreateAndEditFile(OpenWithEditor):
 						% as_human_readable(file_to_edit)
 					)
 					return
-			self.pane.place_cursor_at(file_to_edit)
+				except NotImplementedError:
+					show_alert(
+						'Sorry, creating a file for editing is not supported '
+						'here.'
+					)
+					return
+			try:
+				self.pane.place_cursor_at(file_to_edit)
+			except ValueError:
+				# This can happen when the file is hidden. Eg .bashrc on Linux.
+				pass
 			super().__call__(file_to_edit)
 
 def _find_extension_start(file_name, start=0):
@@ -579,11 +621,11 @@ def _split(url):
 
 class Copy(_TreeCommand):
 	def _call(self, files, dest_dir, src_dir=None, dest_name=None):
-		CopyFiles(fman, files, dest_dir, src_dir, dest_name)()
+		submit_task(CopyFiles(files, dest_dir, src_dir, dest_name))
 
 class Move(_TreeCommand):
 	def _call(self, files, dest_dir, src_dir=None, dest_name=None):
-		MoveFiles(fman, files, dest_dir, src_dir, dest_name)()
+		submit_task(MoveFiles(files, dest_dir, src_dir, dest_name))
 
 class DragAndDropListener(DirectoryPaneListener):
 	def on_files_dropped(self, file_urls, dest_dir, is_copy_not_move):
@@ -648,17 +690,33 @@ class RenameListener(DirectoryPaneListener):
 			if not samefile(new_url, file_url):
 				show_alert(new_name + ' already exists!')
 				return
+		submit_task(_Rename(self.pane, file_url, new_url))
+
+class _Rename(Task):
+	def __init__(self, pane, src_url, dst_url):
+		self._pane = pane
+		self._src_url = src_url
+		self._dst_url = dst_url
+		super().__init__('Renaming ' + basename(src_url))
+	def __call__(self):
+		self.set_text('Preparing...')
+		tasks = list(prepare_move(self._src_url, self._dst_url))
+		self.set_size(sum(t.get_size() for t in tasks))
 		try:
-			move(file_url, new_url)
+			for task in tasks:
+				self.check_canceled()
+				self.run(task)
 		except OSError as e:
 			if isinstance(e, PermissionError):
 				message = 'Access was denied trying to rename %s to %s.'
 			else:
 				message = 'Could not rename %s to %s.'
-			show_alert(message % (old_name, new_name))
+			old_name = basename(self._src_url)
+			new_name = basename(self._dst_url)
+			self.show_alert(message % (old_name, new_name))
 		else:
 			try:
-				self.pane.place_cursor_at(new_url)
+				self._pane.place_cursor_at(self._dst_url)
 			except ValueError as file_disappeared:
 				pass
 
@@ -1455,7 +1513,14 @@ class InstallPlugin(ApplicationCommand):
 		else:
 			if self._plugin_repos is None:
 				with StatusMessage('Fetching available plugins...'):
-					self._plugin_repos = find_repos(topics=['fman', 'plugin'])
+					try:
+						self._plugin_repos = \
+							find_repos(topics=['fman', 'plugin'])
+					except URLError as e:
+						show_alert(
+							'Could not fetch available plugins: %s.' % e.reason
+						)
+						return
 			result = show_quicksearch(self._get_matching_repos)
 			repo = result[1] if result else None
 		if repo:
@@ -1728,17 +1793,15 @@ class Pack(DirectoryPaneCommand):
 			show_alert('No file is selected!')
 			return
 		if len(files) == 1:
-			descr = basename(files[0])
 			dest_name = PurePath(basename(files[0])).stem + '.zip'
 		else:
-			descr = '%d files' % len(files)
 			dest_name = basename(self.pane.get_path()) + '.zip'
 		dest_dir = _get_opposite_pane(self.pane).get_path()
 		dest_url = join(dest_dir, dest_name)
 		suggested_dst, selection_start, selection_end = \
 			get_dest_suggestion(dest_url)
 		dest, ok = show_prompt(
-			'Pack %s to (.zip, .7z, .tar):' % descr, suggested_dst,
+			'Pack %s to (.zip, .7z, .tar):' % _describe(files), suggested_dst,
 			selection_start, selection_end
 		)
 		if dest and ok:
@@ -1758,12 +1821,20 @@ class Pack(DirectoryPaneCommand):
 				)
 				if not answer & YES:
 					return
-			for file_url in files:
-				file_name = basename(file_url)
-				with StatusMessage('Packing %s...' % file_name):
-					copy(file_url, join(dest_rewritten, file_name))
+			submit_task(_Pack(files, dest_rewritten))
 	def is_visible(self):
 		return bool(self.pane.get_file_under_cursor())
+
+class _Pack(Task):
+	def __init__(self, files, archive_url):
+		super().__init__('Packing ' + _describe(files), size=len(files) * 100)
+		self._files = files
+		self._archive = archive_url
+	def __call__(self):
+		for f in self._files:
+			for task in prepare_copy(f, join(self._archive, basename(f))):
+				self.check_canceled()
+				self.run(task)
 
 def _get_handler_for_archive(file_name):
 	settings = load_json('Core Settings.json', default={})

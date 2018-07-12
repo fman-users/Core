@@ -1,6 +1,5 @@
 from fman import PLATFORM
 from core import LocalFileSystem
-from os.path import join
 from unittest import TestCase
 
 class LocalFileSystemTest(TestCase):
@@ -8,9 +7,10 @@ class LocalFileSystemTest(TestCase):
 		with self.assertRaises(FileExistsError):
 			self._fs.mkdir('C:' if PLATFORM == 'Windows' else '/')
 	def test_iterdir_nonexistent(self):
-		root = 'C:\\' if PLATFORM == 'Windows' else '/'
+		root = 'C:/' if PLATFORM == 'Windows' else '/'
+		path = root + 'nonexistent'
 		with self.assertRaises(FileNotFoundError):
-			next(iter(self._fs.iterdir(join(root, 'nonexistent'))))
+			next(iter(self._fs.iterdir(path)))
 	def setUp(self):
 		super().setUp()
 		self._fs = LocalFileSystem()

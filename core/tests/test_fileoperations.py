@@ -132,9 +132,6 @@ class FileTreeOperationAT:
 			answer=OK
 		)
 		self._perform_on(dir_, *files)
-		# Should still have copied c:
-		self._expect_files({'a', 'b', 'c', 'dir'})
-		return c
 	def test_move_dir_to_self(self):
 		dir_ = join(self.src, 'dir')
 		self._makedirs(dir_)
@@ -243,13 +240,13 @@ class FileTreeOperationAT:
 		self._assert_file_contents_equal(join(self.dest, 'test.txt'), '1234')
 	def test_overwrite_directory_file_in_subdir(self):
 		self._touch(join(self.src, 'dir1', 'dir2', 'test.txt'))
-		self._makedirs(join(self.dest, 'dir1'))
+		self._makedirs(join(self.dest, 'dir1', 'dir2'))
 		self._perform_on(join(self.src, 'dir1'))
 		self._expect_files({'test.txt'}, in_dir=join(self.dest, 'dir1', 'dir2'))
 	def setUp(self):
 		super().setUp()
 		self._fs = StubFS()
-		self.ui = StubUI(self)
+		self._progress_dialog = MockProgressDialog(self)
 		self._tmp_dir = TemporaryDirectory()
 		self._root = as_url(self._tmp_dir.name)
 		# We need intermediate 'src-parent' for test_relative_path_parent_dir:
@@ -269,8 +266,10 @@ class FileTreeOperationAT:
 			dest_dir = self.dest
 		if src_dir == '':
 			src_dir = self.src
-		self.operation(self.ui, files, dest_dir, src_dir, dest_name, self._fs)()
-		self.ui.verify_expected_dialogs_were_shown()
+		op = self.operation(files, dest_dir, src_dir, dest_name, self._fs)
+		op._dialog = self._progress_dialog
+		op()
+		self._progress_dialog.verify_expected_dialogs_were_shown()
 	def _assert_file_contents_equal(self, url, expected_contents):
 		with self._open(url, 'r') as f:
 			self.assertEqual(expected_contents, f.read())
@@ -297,7 +296,7 @@ class FileTreeOperationAT:
 	def _readlink(self, link_url):
 		return as_url(os.readlink(as_human_readable(link_url)))
 	def _expect_alert(self, args, answer):
-		self.ui.expect_alert(args, answer)
+		self._progress_dialog.expect_alert(args, answer)
 	def _expect_files(self, files, in_dir=None):
 		if in_dir is None:
 			in_dir = self.dest
@@ -335,8 +334,7 @@ class CopyFilesTest(FileTreeOperationAT, TestCase):
 				 YES | NO | YES_TO_ALL | NO_TO_ALL | ABORT, YES), answer=YES
 			)
 			self._expect_alert(
-				('Could not copy %s (permission denied).'
-				 % as_human_readable(src_file), OK, OK),
+				('Error copying foo.txt (permission denied).', OK, OK),
 				answer=OK
 			)
 			self._perform_on(dir_)
@@ -368,9 +366,6 @@ class MoveFilesTest(FileTreeOperationAT, TestCase):
 		for i, file_ in enumerate(src_files):
 			if expect_overrides[i]:
 				self.assertFalse(exists(file_), file_)
-	def test_move_to_self(self):
-		external_file = super().test_move_to_self()
-		self.assertFalse(exists(external_file))
 	@skipIf(PLATFORM == 'Linux', 'Case-insensitive file systems only')
 	def test_rename_directory_case(self):
 		container = join(self.dest, 'container')
@@ -418,3 +413,32 @@ class MoveFilesTest(FileTreeOperationAT, TestCase):
 	def test_overwrite_directory_file_in_subdir(self):
 		super().test_overwrite_directory_file_in_subdir()
 		self.assertNotIn('dir1', self._fs.iterdir(self.src))
+
+class MockProgressDialog:
+	def __init__(self, test_case):
+		self._test_case = test_case
+		self._progress = 0
+		self._expected_alerts = []
+	def expect_alert(self, args, answer):
+		self._expected_alerts.append((args, answer))
+	def verify_expected_dialogs_were_shown(self):
+		self._test_case.assertEqual(
+			[], self._expected_alerts, 'Did not receive all expected alerts.'
+		)
+	def show_alert(self, *args, **_):
+		if not self._expected_alerts:
+			self._test_case.fail('Unexpected alert: %r' % args[0])
+			return
+		expected_args, answer = self._expected_alerts.pop(0)
+		self._test_case.assertEqual(expected_args, args, "Wrong alert")
+		return answer
+	def set_text(self, text):
+		pass
+	def was_canceled(self):
+		return False
+	def set_task_size(self, size):
+		pass
+	def get_progress(self):
+		return self._progress
+	def set_progress(self, progress):
+		self._progress = progress

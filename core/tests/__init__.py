@@ -1,5 +1,7 @@
 from core import LocalFileSystem
-from fman.url import splitscheme
+from fman import Task
+from fman.fs import FileSystem
+from fman.url import splitscheme, basename
 
 class StubUI:
 	def __init__(self, test_case):
@@ -36,40 +38,47 @@ class StubUI:
 	def clear_status_message(self):
 		pass
 
-class StubFS:
+class StubFS(FileSystem):
 	def __init__(self, backend=None):
 		if backend is None:
 			backend = LocalFileSystem()
-		self._backend = backend
+		super().__init__()
+		self._backends = {backend.scheme: backend}
+	def add_child(self, backend):
+		self._backends[backend.scheme] = backend
 	def is_dir(self, url):
-		return self._backend.is_dir(self._as_path(url))
-	def exists(self, url):
-		return self._backend.exists(self._as_path(url))
-	def samefile(self, url1, url2):
-		return self._backend.samefile(self._as_path(url1), self._as_path(url2))
-	def iterdir(self, url):
-		return self._backend.iterdir(self._as_path(url))
-	def makedirs(self, url, exist_ok=False):
-		self._backend.makedirs(self._as_path(url), exist_ok=exist_ok)
-	def copy(self, src_url, dst_url):
-		self._backend.copy(src_url, dst_url)
-	def delete(self, url):
-		self._backend.delete(self._as_path(url))
-	def move(self, src_url, dst_url):
-		self._backend.move(src_url, dst_url)
-	def touch(self, url):
-		self._backend.touch(self._as_path(url))
-	def mkdir(self, url):
-		self._backend.mkdir(self._as_path(url))
-	def query(self, url, fs_method_name):
-		path = self._as_path(url)
-		return getattr(self._backend, fs_method_name)(path)
-	def _as_path(self, url):
 		scheme, path = splitscheme(url)
-		required_scheme = self._backend.scheme
-		if scheme != required_scheme:
-			raise ValueError(
-				'This stub implementation only supports %s urls.' %
-				required_scheme
-			)
-		return path
+		return self._backends[scheme].is_dir(path)
+	def exists(self, url):
+		scheme, path = splitscheme(url)
+		return self._backends[scheme].exists(path)
+	def samefile(self, url1, url2):
+		scheme1, path1 = splitscheme(url1)
+		scheme2, path2 = splitscheme(url2)
+		if scheme1 != scheme2:
+			return False
+		return self._backends[scheme1].samefile(path1, path2)
+	def iterdir(self, url):
+		scheme, path = splitscheme(url)
+		return self._backends[scheme].iterdir(path)
+	def makedirs(self, url, exist_ok=False):
+		scheme, path = splitscheme(url)
+		self._backends[scheme].makedirs(path, exist_ok=exist_ok)
+	def copy(self, src_url, dst_url):
+		scheme = splitscheme(src_url)[0]
+		self._backends[scheme].copy(src_url, dst_url)
+	def delete(self, url):
+		scheme, path = splitscheme(url)
+		self._backends[scheme].delete(path)
+	def move(self, src_url, dst_url):
+		scheme = splitscheme(src_url)[0]
+		self._backends[scheme].move(src_url, dst_url)
+	def touch(self, url):
+		scheme, path = splitscheme(url)
+		self._backends[scheme].touch(path)
+	def mkdir(self, url):
+		scheme, path = splitscheme(url)
+		self._backends[scheme].mkdir(path)
+	def query(self, url, fs_method_name):
+		scheme, path = splitscheme(url)
+		return getattr(self._backends[scheme], fs_method_name)(path)
