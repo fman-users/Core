@@ -1,5 +1,5 @@
 # Core
-This repository contains the source code of [fman](https://fman.io)'s Core plugin. It uses fman's [plugin API](https://fman.io/docs/api) to implement virtually all basic features, such as copying files, navigating to a folder etc. fman "eats its own dog food" in this way to ensure that the API is stable and powerful enough for real world use.
+The Core plugin implements most of [fman](https://fman.io)'s features, such as copying files, navigating to a folder etc. It relies heavily on the [plugin API](https://fman.io/docs/api). fman uses its own plugin system in this way to ensure that the API is stable and powerful enough for real world use.
 
 ## Examples
 
