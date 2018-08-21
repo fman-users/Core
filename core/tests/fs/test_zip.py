@@ -298,6 +298,13 @@ class ZipFileSystemTest(TestCase):
 	def test_modified_datetime_nonexistent_path_in_zip(self):
 		with self.assertRaises(FileNotFoundError):
 			self._fs.modified_datetime(self._path('nonexistent'))
+	def test_resolve_nonexistent_zip_raises_filenotfounderror(self):
+		with self.assertRaises(FileNotFoundError):
+			tmp_url = as_url(self._tmp_dir.name)
+			self._fs.resolve(splitscheme(join(tmp_url, 'non-existent.zip'))[1])
+	def test_resolve_nonexistent_file(self):
+		with self.assertRaises(FileNotFoundError):
+			self._fs.resolve('non-existent')
 	def _expect_iterdir_result(self, path_in_zip, expected_contents):
 		full_path = self._path(path_in_zip)
 		# Consider ç: It can be encoded in Unicode as "latin small letter c

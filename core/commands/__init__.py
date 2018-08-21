@@ -7,7 +7,8 @@ from core.quicksearch_matchers import path_starts_with, basename_starts_with, \
 	contains_chars, contains_chars_after_separator
 from fman import *
 from fman.fs import exists, touch, mkdir, is_dir, delete, samefile, copy, \
-	iterdir, resolve, prepare_copy, prepare_move, prepare_delete, prepare_trash
+	iterdir, resolve, prepare_copy, prepare_move, prepare_delete, \
+	FileSystem, prepare_trash, query
 from fman.url import splitscheme, as_url, join, basename, as_human_readable, \
 	dirname
 from getpass import getuser
@@ -22,6 +23,7 @@ from subprocess import Popen, DEVNULL, PIPE
 from tempfile import TemporaryDirectory
 from urllib.error import URLError
 
+import errno
 import fman
 import fman.fs
 import json
@@ -281,8 +283,14 @@ def _open_files(urls):
 	for url in urls:
 		try:
 			url = resolve(url)
-		except OSError:
+		except FileNotFoundError:
+			# No sense to try to open a file that does not exist.
 			continue
+		except OSError as e:
+			# Not all OSErrors need prevent us from opening the file.
+			# So only skip this file if it does not exist:
+			if e.errno == errno.ENOENT:
+				continue
 		scheme = splitscheme(url)[0]
 		if scheme != 'file://':
 			show_alert(
@@ -298,26 +306,27 @@ def _open_files(urls):
 		_open_local_file(path)
 
 def _open_local_file(path):
-	cwd = os.path.dirname(path)
-	kwargs = {
-		'cwd': cwd
-	}
 	if PLATFORM == 'Windows':
-		file_name = os.path.basename(path)
-		pathext = os.environ.get("PATHEXT", "").split(os.pathsep)
-		if any(file_name.lower().endswith(ext.lower()) for ext in pathext):
-			args = [path]
-		else:
-			# The empty arg '' is the "title of the command window".
-			# It is required:
-			args = ['start', '', '/D', cwd, file_name.replace('&', '^&')]
-			kwargs['shell'] = True
+		# Whichever implementation is used here, it should support:
+		#  * C:\picture.jpg
+		#  * C:\notepad.exe
+		#  * C:\a & b.txt
+		#  * C:\batch.bat with `pause` at the end
+		#  * \\server\share\picture.jpg
+		#  * D:\Book.pdf
+		#  * \\cryptomator-vault\app.exe
+		try:
+			os.startfile(path)
+		except OSError:
+			# This for instance happens when the file is an .exe that requires
+			# Admin privileges, but the user cancels the UAC "do you want to run
+			# this file?" dialog.
+			pass
 	else:
-		args = [path]
-	try:
-		Popen(args, **kwargs)
-	except (OSError, ValueError):
-		QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+		try:
+			Popen([path], cwd=os.path.dirname(path))
+		except (OSError, ValueError):
+			QDesktopServices.openUrl(QUrl.fromLocalFile(path))
 
 class OpenSelectedFiles(DirectoryPaneCommand):
 	def __call__(self):
@@ -743,6 +752,14 @@ class CreateDirectory(DirectoryPaneCommand):
 				self.pane.place_cursor_at(dir_url)
 			except ValueError as dir_disappeared:
 				pass
+	def is_visible(self):
+		fs = splitscheme(self.pane.get_path())[0]
+		return _fs_implements(fs, 'mkdir')
+
+def _fs_implements(scheme, method_name):
+	# Using query(...) in this way is quite hacky, but works:
+	method = query(scheme + method_name, '__getattr__')
+	return method.__func__ is not getattr(FileSystem, method_name)
 
 class OpenTerminal(DirectoryPaneCommand):
 
@@ -980,25 +997,30 @@ class GoTo(DirectoryPaneCommand):
 		get_items = SuggestLocations(self._get_visited_paths())
 		result = show_quicksearch(get_items, self._get_tab_completion, query)
 		if result:
-			query, suggested_dir = result
-			path = suggested_dir or expanduser(query.rstrip())
-			url = as_url(path)
+			url = self._get_target_location(*result)
+			if url:
+				# Use OpenDirectory because it handles errors gracefully:
+				self.pane.run_command('open_directory', {'url': url})
+	def _get_target_location(self, query, suggested_dir):
+		query = expanduser(query.rstrip())
+		# Try `query` first (ie. prioritize it over `suggested_dir`) because the
+		# user may have entered a path that does exist but was not automatically
+		# suggested. A known case where this currently occurs is for UNC paths
+		# on Windows. Eg.: \\server\folder. It can happen in this case that
+		# suggested_dir is \\other-server\folder. But we do want to open
+		# \\server\folder if it exists. By trying `query` first, the
+		# implementation below ensures that this happens.
+		url = as_url(query)
+		if PLATFORM == 'Windows' and re.match(r'\\[^\\]', query):
+			# Resolve '\Some\dir' to 'C:\Some\dir'.
 			try:
-				isdir = is_dir(url)
+				url = resolve(url)
 			except OSError:
-				# This for instance happens when the URL does not exist.
 				pass
-			else:
-				if isdir:
-					self.pane.set_path(url)
-				else:
-					# Exists and is a file.
-					def callback():
-						try:
-							self.pane.place_cursor_at(url)
-						except ValueError as url_disappeared:
-							pass
-					self.pane.set_path(dirname(url), callback=callback)
+		if exists(url):
+			return url
+		if suggested_dir: # Can be None if no dir suggested
+			return as_url(suggested_dir)
 	def _get_tab_completion(self, query, curr_item):
 		if curr_item:
 			result = curr_item.title
@@ -1897,8 +1919,6 @@ class SortByColumn(DirectoryPaneCommand):
 			else:
 				ascending = True
 			self.pane.set_sort_column(column, ascending)
-			path = self.pane.get_path()
-			self._remember_settings(path, column, ascending)
 	def _get_items(self, columns, query):
 		result = [[] for _ in self._MATCHERS]
 		for col_qual_name in columns:
@@ -1910,7 +1930,30 @@ class SortByColumn(DirectoryPaneCommand):
 					result[i].append(item)
 					break
 		return chain.from_iterable(result)
-	def _remember_settings(self, url, column, is_ascending):
+
+class RememberSortSettings(DirectoryPaneListener):
+	def before_location_change(self, url, sort_column='', ascending=True):
+		self._remember_curr_sort_column()
+		try:
+			# Consider: We're at zip:///foo.zip and go up. This moves us to
+			# zip:/// - which resolves to file:///. The sort settings will have
+			# been saved for this latter URL. So we have to resolve(...) to go
+			# from the former to the latter:
+			url_resolved = resolve(url)
+		except OSError:
+			url_resolved = url
+		settings = load_json('Sort Settings.json', default={})
+		try:
+			data = settings[url_resolved]
+		except KeyError:
+			return
+		remembered_col, remembered_asc = data['column'], data['is_ascending']
+		# Note that we return `url` here, not `url_resolved`. This is eg.
+		# because we don't want to rewrite C:\Windows\System32 -> ...\SysWOW64.
+		return url, remembered_col, remembered_asc
+	def _remember_curr_sort_column(self):
+		column, is_ascending = self.pane.get_sort_column()
+		url = self.pane.get_path()
 		settings = load_json('Sort Settings.json', default={})
 		default = (self.pane.get_columns()[0], True)
 		if (column, is_ascending) == default:
@@ -1921,24 +1964,6 @@ class SortByColumn(DirectoryPaneCommand):
 				'is_ascending': is_ascending
 			}
 		save_json('Sort Settings.json')
-
-class RememberSortSettings(DirectoryPaneListener):
-	def before_location_change(self, url, sort_column='', ascending=True):
-		try:
-			# Consider: We're at zip:///foo.zip and go up. This moves us to
-			# zip:/// - which resolves to file:///. The sort settings will have
-			# been saved for this latter URL. So we have to resolve(...) to go
-			# from the former to the latter:
-			url = resolve(url)
-		except OSError:
-			pass
-		settings = load_json('Sort Settings.json', default={})
-		try:
-			data = settings[url]
-		except KeyError:
-			return
-		remembered_col, remembered_asc = data['column'], data['is_ascending']
-		return url, remembered_col, remembered_asc
 
 class Minimize(ApplicationCommand):
 	def __call__(self):
@@ -1963,7 +1988,7 @@ class OpenWith(DirectoryPaneCommand):
 
 	_OTHER = 'Other...'
 
-	def __call__(self):
+	def __call__(self, app=None):
 		files, error_msg = self._get_chosen_files()
 		if error_msg:
 			show_alert(error_msg)
@@ -1974,7 +1999,10 @@ class OpenWith(DirectoryPaneCommand):
 			if app:
 				_open_files_with_app(files, app)
 		else:
-			ShowAppsForOpening(files).show()
+			if app is None:
+				ShowAppsForOpening(files).show()
+			else:
+				_open_files_with_app(files, app)
 	def _get_chosen_files(self):
 		urls = self.get_chosen_files()
 		if not urls:
@@ -2209,6 +2237,13 @@ if PLATFORM == 'Mac':
 		aliases = ('Quick Look', 'Preview')
 
 		def __call__(self):
-			file_under_cursor = self.pane.get_file_under_cursor()
-			if file_under_cursor:
-				Popen(['qlmanage', '-p', as_human_readable(file_under_cursor)])
+			files = self.get_chosen_files()
+			if not files:
+				show_alert('No file is selected!')
+				return
+			if any(splitscheme(f)[0] != 'file://' for f in files):
+				show_alert('Sorry, can only preview normal files.')
+				return
+			args = ['qlmanage', '-p']
+			args.extend(map(as_human_readable, files))
+			Popen(args, stdout=DEVNULL, stderr=DEVNULL)

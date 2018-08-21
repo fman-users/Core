@@ -46,6 +46,10 @@ class ShowExplorerProperties(DirectoryPaneCommand):
 				filenames = [basename(f) for f in chosen_files]
 			return lambda: _show_file_properties(dir_, filenames)
 		elif scheme == 'drives://':
+			if file_under_cursor is None:
+				# This usually happens when the user right-clicked in the drive
+				# overview (but not _on_ a drive).
+				return None
 			drive = splitscheme(file_under_cursor)[1]
 			if self._is_drive(drive):
 				return lambda: _show_drive_properties(drive)

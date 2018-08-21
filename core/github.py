@@ -74,6 +74,8 @@ def _get_json(url):
 def _get(url):
 	try:
 		return urlopen(url).read()
+	except HTTPError:
+		raise
 	except URLError:
 		# Fallback: Some users get "SSL: CERTIFICATE_VERIFY_FAILED" for urlopen.
 		try:

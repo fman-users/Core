@@ -9,7 +9,7 @@ from fman.url import as_url, splitscheme, as_human_readable, join, basename, \
 	dirname
 from io import UnsupportedOperation
 from os import remove, rmdir
-from os.path import islink, samestat
+from os.path import islink, samestat, isabs
 from pathlib import Path
 from PyQt5.QtCore import QFileSystemWatcher
 from shutil import copystat
@@ -31,23 +31,32 @@ class LocalFileSystem(FileSystem):
 	def get_default_columns(self, path):
 		return 'core.Name', 'core.Size', 'core.Modified'
 	def exists(self, path):
-		return Path(self._url_to_os_path(path)).exists()
+		os_path = self._url_to_os_path(path)
+		return isabs(os_path) and Path(os_path).exists()
 	def iterdir(self, path):
-		for entry in Path(self._url_to_os_path(path)).iterdir():
-			yield entry.name
+		os_path = self._url_to_os_path(path)
+		if not isabs(os_path):
+			raise filenotfounderror(path)
+		# Use os.listdir(...) instead of Path(...).iterdir() for performance:
+		return os.listdir(os_path)
 	def is_dir(self, existing_path):
 		# Like Python's isdir(...) except raises FileNotFoundError if the file
 		# does not exist and OSError if there is another error.
 		return S_ISDIR(self.stat(existing_path).st_mode)
 	@cached
 	def stat(self, path):
-		return os.stat(self._url_to_os_path(path))
+		os_path = self._url_to_os_path(path)
+		if not isabs(os_path):
+			raise filenotfounderror(path)
+		return os.stat(os_path)
 	def size_bytes(self, path):
 		return self.stat(path).st_size
 	def modified_datetime(self, path):
 		return datetime.fromtimestamp(self.stat(path).st_mtime)
 	def touch(self, path):
 		os_path = Path(self._url_to_os_path(path))
+		if not os_path.is_absolute():
+			raise ValueError('Path must be absolute')
 		try:
 			os_path.touch(exist_ok=False)
 		except FileExistsError:
@@ -56,6 +65,8 @@ class LocalFileSystem(FileSystem):
 			self.notify_file_added(path)
 	def mkdir(self, path):
 		os_path = Path(self._url_to_os_path(path))
+		if not os_path.is_absolute():
+			raise ValueError('Path must be absolute')
 		try:
 			os_path.mkdir()
 		except FileNotFoundError:
@@ -75,14 +86,14 @@ class LocalFileSystem(FileSystem):
 				raise
 		self.notify_file_added(path)
 	def move(self, src_url, dst_url):
-		self._check_scheme(src_url, dst_url)
+		self._check_transfer_precnds(src_url, dst_url)
 		for task in self._prepare_move(src_url, dst_url):
 			task()
 	def prepare_move(self, src_url, dst_url):
-		self._check_scheme(src_url, dst_url)
+		self._check_transfer_precnds(src_url, dst_url)
 		return self._prepare_move(src_url, dst_url, measure_size=True)
 	def _prepare_move(self, src_url, dst_url, measure_size=False):
-		src_path, dst_path = self._check_scheme(src_url, dst_url)
+		src_path, dst_path = self._check_transfer_precnds(src_url, dst_url)
 		src_stat = self.stat(src_path)
 		dst_dir_dev = self.stat(splitscheme(dirname(dst_url))[1]).st_dev
 		if src_stat.st_dev == dst_dir_dev:
@@ -108,12 +119,15 @@ class LocalFileSystem(FileSystem):
 		for task in self.prepare_trash(path):
 			task()
 	def prepare_trash(self, path):
+		os_path = self._url_to_os_path(path)
+		if not isabs(os_path):
+			raise filenotfounderror(path)
 		yield Task(
 			'Deleting ' + path.rsplit('/', 1)[-1], size=1,
-			fn=self._do_trash, args=(path,)
+			fn=self._do_trash, args=(path, os_path)
 		)
-	def _do_trash(self, path):
-		move_to_trash(self._url_to_os_path(path))
+	def _do_trash(self, path, os_path):
+		move_to_trash(os_path)
 		self.notify_file_removed(path)
 	def delete(self, path):
 		for task in self.prepare_delete(path):
@@ -136,9 +150,9 @@ class LocalFileSystem(FileSystem):
 		delete_fn(path)
 		self.notify_file_removed(path)
 	def resolve(self, path):
-		if not path:
-			raise filenotfounderror(path)
 		path = self._url_to_os_path(path)
+		if not isabs(path):
+			raise filenotfounderror(path)
 		if PLATFORM == 'Windows':
 			is_unc_server = path.startswith(r'\\') and not '\\' in path[2:]
 			if is_unc_server:
@@ -158,14 +172,14 @@ class LocalFileSystem(FileSystem):
 	def samefile(self, path1, path2):
 		return samestat(self.stat(path1), self.stat(path2))
 	def copy(self, src_url, dst_url):
-		self._check_scheme(src_url, dst_url)
+		self._check_transfer_precnds(src_url, dst_url)
 		for task in self._prepare_copy(src_url, dst_url):
 			task()
 	def prepare_copy(self, src_url, dst_url):
-		self._check_scheme(src_url, dst_url)
+		self._check_transfer_precnds(src_url, dst_url)
 		return self._prepare_copy(src_url, dst_url, measure_size=True)
 	def _prepare_copy(self, src_url, dst_url, measure_size=False):
-		src_path, dst_path = self._check_scheme(src_url, dst_url)
+		src_path, dst_path = self._check_transfer_precnds(src_url, dst_url)
 		src_is_dir = self.is_dir(src_path)
 		if src_is_dir:
 			yield Task(
@@ -199,11 +213,13 @@ class LocalFileSystem(FileSystem):
 	def _on_file_changed(self, file_path):
 		path_forward_slashes = splitscheme(as_url(file_path))[1]
 		self.notify_file_changed(path_forward_slashes)
-	def _check_scheme(self, src_url, dst_url):
+	def _check_transfer_precnds(self, src_url, dst_url):
 		src_scheme, src_path = splitscheme(src_url)
 		dst_scheme, dst_path = splitscheme(dst_url)
 		if src_scheme != self.scheme or dst_scheme != self.scheme:
 			raise UnsupportedOperation()
+		if not isabs(self._url_to_os_path(dst_path)):
+			raise ValueError('Destination path must be absolute')
 		return src_path, dst_path
 	def _url_to_os_path(self, path):
 		# Convert a "URL path" a/b to a path understood by the OS, eg. a\b on
