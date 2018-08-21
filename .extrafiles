@@ -1,4 +1,5 @@
 # List the files in this repo that do not come from the Core plugin:
+.extrafiles
 .git
 .editorconfig
 .gitignore
