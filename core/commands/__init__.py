@@ -370,19 +370,26 @@ class OpenWithEditor(DirectoryPaneCommand):
 	def _get_editor(self):
 		settings = load_json('Core Settings.json', default={})
 		result = settings.get('editor', {})
-		if not result:
-			choice = show_alert(
-				'Editor is currently not configured. Please pick one.',
-				OK | CANCEL, OK
-			)
-			if choice & OK:
-				editor_path = _show_app_open_dialog('Pick an Editor')
-				if editor_path:
-					result = \
-						get_popen_kwargs_for_opening(['{file}'], editor_path)
-					settings['editor'] = result
-					save_json('Core Settings.json')
-		return result
+		if result:
+			try:
+				executable_path = result['args'][0]
+			except (KeyError, IndexError, TypeError):
+				pass
+			else:
+				if os.path.exists(executable_path):
+					return result
+			message = 'Could not find your editor. Please select it again.'
+		else:
+			message = 'Editor is currently not configured. Please pick one.'
+		choice = show_alert(message, OK | CANCEL, OK)
+		if choice & OK:
+			editor_path = _show_app_open_dialog('Pick an Editor')
+			if editor_path:
+				result = get_popen_kwargs_for_opening(['{file}'], editor_path)
+				settings['editor'] = result
+				save_json('Core Settings.json')
+				return result
+		return {}
 
 def _show_app_open_dialog(caption):
 	return show_file_open_dialog(
