@@ -9,7 +9,7 @@ from fman.url import as_url, splitscheme, as_human_readable, join, basename, \
 	dirname
 from io import UnsupportedOperation
 from os import remove, rmdir
-from os.path import islink, samestat, isabs
+from os.path import islink, samestat, isabs, splitdrive
 from pathlib import Path
 from PyQt5.QtCore import QFileSystemWatcher
 from shutil import copystat
@@ -32,10 +32,10 @@ class LocalFileSystem(FileSystem):
 		return 'core.Name', 'core.Size', 'core.Modified'
 	def exists(self, path):
 		os_path = self._url_to_os_path(path)
-		return isabs(os_path) and Path(os_path).exists()
+		return self._isabs(os_path) and Path(os_path).exists()
 	def iterdir(self, path):
 		os_path = self._url_to_os_path(path)
-		if not isabs(os_path):
+		if not self._isabs(os_path):
 			raise filenotfounderror(path)
 		# Use os.listdir(...) instead of Path(...).iterdir() for performance:
 		return os.listdir(os_path)
@@ -46,7 +46,7 @@ class LocalFileSystem(FileSystem):
 	@cached
 	def stat(self, path):
 		os_path = self._url_to_os_path(path)
-		if not isabs(os_path):
+		if not self._isabs(os_path):
 			raise filenotfounderror(path)
 		return os.stat(os_path)
 	def size_bytes(self, path):
@@ -120,7 +120,7 @@ class LocalFileSystem(FileSystem):
 			task()
 	def prepare_trash(self, path):
 		os_path = self._url_to_os_path(path)
-		if not isabs(os_path):
+		if not self._isabs(os_path):
 			raise filenotfounderror(path)
 		yield Task(
 			'Deleting ' + path.rsplit('/', 1)[-1], size=1,
@@ -151,7 +151,7 @@ class LocalFileSystem(FileSystem):
 		self.notify_file_removed(path)
 	def resolve(self, path):
 		path = self._url_to_os_path(path)
-		if not isabs(path):
+		if not self._isabs(path):
 			raise filenotfounderror(path)
 		if PLATFORM == 'Windows':
 			is_unc_server = path.startswith(r'\\') and not '\\' in path[2:]
@@ -218,7 +218,7 @@ class LocalFileSystem(FileSystem):
 		dst_scheme, dst_path = splitscheme(dst_url)
 		if src_scheme != self.scheme or dst_scheme != self.scheme:
 			raise UnsupportedOperation()
-		if not isabs(self._url_to_os_path(dst_path)):
+		if not self._isabs(self._url_to_os_path(dst_path)):
 			raise ValueError('Destination path must be absolute')
 		return src_path, dst_path
 	def _url_to_os_path(self, path):
@@ -226,6 +226,10 @@ class LocalFileSystem(FileSystem):
 		# Windows. An important effect of this function is that it turns
 		# C: -> C:\. This is required for Python functions such as Path#resolve.
 		return as_human_readable(self.scheme + path)
+	def _isabs(self, os_path):
+		# Python's isabs(...) says \\host\share is *not* absolute. But for our
+		# purposes, it is. So add some extra logic to handle this case:
+		return isabs(os_path) or splitdrive(os_path)[0]
 
 class CopyFile(Task):
 	def __init__(self, fs, src_url, dst_url, size_bytes):

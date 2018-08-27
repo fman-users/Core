@@ -26,6 +26,7 @@ class FileTreeOperation(Task):
 		self._num_files = 0
 		self._cannot_move_to_self_shown = False
 		self._override_all = None
+		self._ignore_exceptions = False
 	def _transfer(self, src, dest):
 		raise NotImplementedError()
 	def _prepare_transfer(self, src, dest):
@@ -161,6 +162,8 @@ class FileTreeOperation(Task):
 				)
 			self._tasks.append(task)
 	def _handle_exception(self, message, is_last, exc):
+		if self._ignore_exceptions:
+			return True
 		if exc.strerror:
 			cause = exc.strerror[0].lower() + exc.strerror[1:]
 		else:
@@ -177,6 +180,8 @@ class FileTreeOperation(Task):
 		if is_last:
 			return choice & OK
 		else:
+			if choice & YES_TO_ALL:
+				self._ignore_exceptions = True
 			return choice & YES or choice & YES_TO_ALL
 	def _get_dest_dir_url(self):
 		try:

@@ -193,23 +193,41 @@ class FileTreeOperationAT:
 		return foo
 	def test_dest_name_same_dir(self):
 		self.test_dest_name(src_equals_dest=True)
-	def test_error_continue(self, do_continue=True):
-		nonexistent_file = join(self.src, 'foo.txt')
+	def test_error(self, answer_1=YES, answer_2=YES):
+		nonexistent_file_1 = join(self.src, 'foo1.txt')
+		nonexistent_file_2 = join(self.src, 'foo2.txt')
 		existent_file = join(self.src, 'bar.txt')
 		self._touch(existent_file)
 		self._expect_alert(
 			('Could not %s %s (%s). '
 			 'Do you want to continue?' % (
-				self.operation_descr_verb, as_human_readable(nonexistent_file),
-				self._NO_SUCH_FILE_MSG
+				self.operation_descr_verb,
+				as_human_readable(nonexistent_file_1), self._NO_SUCH_FILE_MSG
 			 ),
 			 YES | YES_TO_ALL | ABORT, YES),
-			answer=YES if do_continue else ABORT
+			answer=answer_1
 		)
-		self._perform_on(nonexistent_file, existent_file)
-		self._expect_files({'bar.txt'} if do_continue else set())
+		if not answer_1 & ABORT and not answer_1 & YES_TO_ALL:
+			self._expect_alert(
+				('Could not %s %s (%s). '
+				 'Do you want to continue?' % (
+					 self.operation_descr_verb,
+					 as_human_readable(nonexistent_file_2),
+					 self._NO_SUCH_FILE_MSG
+				 ),
+				 YES | YES_TO_ALL | ABORT, YES),
+				answer=answer_2
+			)
+		self._perform_on(nonexistent_file_1, nonexistent_file_2, existent_file)
+		if not answer_1 & ABORT and not answer_2 & ABORT:
+			expected_files = {'bar.txt'}
+		else:
+			expected_files = set()
+		self._expect_files(expected_files)
+	def test_error_yes_to_all(self):
+		self.test_error(answer_1=YES_TO_ALL)
 	def test_error_abort(self):
-		self.test_error_continue(do_continue=False)
+		self.test_error(answer_1=ABORT)
 	def test_error_only_one_file(self):
 		nonexistent_file = join(self.src, 'foo.txt')
 		file_path = as_human_readable(nonexistent_file)

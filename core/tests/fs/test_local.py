@@ -3,7 +3,7 @@ from fman.url import join, as_url
 from core import LocalFileSystem
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest import TestCase
+from unittest import TestCase, skipIf
 
 import os
 
@@ -59,6 +59,13 @@ class LocalFileSystemTest(TestCase):
 				self._fs.delete(file_name)
 			with self.assertRaises(FileNotFoundError):
 				self._fs.resolve(subdir_name)
+	@skipIf(PLATFORM != 'Windows', 'Skip Windows-only test')
+	def test_isabs_windows(self):
+		self.assertTrue(self._fs._isabs(r'\\host'))
+		self.assertTrue(self._fs._isabs(r'\\host\share'))
+		self.assertTrue(self._fs._isabs(r'\\host\share\subfolder'))
+		self.assertFalse(self._fs._isabs('dir'))
+		self.assertFalse(self._fs._isabs(r'dir\subdir'))
 	def setUp(self):
 		super().setUp()
 		self._fs = LocalFileSystem()

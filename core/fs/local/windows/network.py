@@ -46,15 +46,17 @@ class NetworkFileSystem(FileSystem):
 					yield tail
 			elif not path:
 				yield subpath
-	def _iter_handle(self, handle=None):
+	def _iter_handle(self, handle, already_visited=None):
+		if already_visited is None:
+			already_visited = set()
 		try:
-			handle = \
+			enum = \
 				WNetOpenEnum(RESOURCE_GLOBALNET, RESOURCETYPE_DISK, 0, handle)
 		except WNetError:
 			pass
 		else:
 			try:
-				items = iter(WNetEnumResource(handle, 0))
+				items = iter(WNetEnumResource(enum, 0))
 				while True:
 					try:
 						item = next(items)
@@ -64,6 +66,8 @@ class NetworkFileSystem(FileSystem):
 						path = item.lpRemoteName
 						if path.startswith(r'\\'):
 							yield path[2:].replace('\\', '/').rstrip('/')
-						yield from self._iter_handle(item)
+						if path not in already_visited:
+							already_visited.add(path)
+							yield from self._iter_handle(item, already_visited)
 			finally:
-				handle.Close()
+				enum.Close()
