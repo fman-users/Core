@@ -236,6 +236,20 @@ class Open(DirectoryPaneCommand):
 			# possible for plugins to modify the default open behaviour by
 			# implementing DirectoryPaneListener#on_command(...).
 			if url_is_dir:
+				if PLATFORM == 'Mac' and url.endswith('.app'):
+					dialogs = load_json('Core Dialogs.json', default={})
+					if not dialogs.get('open_app_hint_shown', False):
+						show_alert(
+							'Quick tip: Apps in macOS are directories. When '
+							'you press '
+							'<span style="color: white;">Enter</span>, '
+							'fman therefore browses them. If you want to '
+							'launch the app instead, press '
+							'<span style="color: white;">Cmd+Enter</span>.'
+						)
+						dialogs['open_app_hint_shown'] = True
+						save_json('Core Dialogs.json')
+						return
 				self.pane.run_command('open_directory', {'url': url})
 			else:
 				self.pane.run_command('open_file', {'url': url})

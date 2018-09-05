@@ -1,5 +1,5 @@
 from fman import PLATFORM
-from fman.url import join, as_url
+from fman.url import join, as_url, splitscheme
 from core import LocalFileSystem
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -66,6 +66,12 @@ class LocalFileSystemTest(TestCase):
 		self.assertTrue(self._fs._isabs(r'\\host\share\subfolder'))
 		self.assertFalse(self._fs._isabs('dir'))
 		self.assertFalse(self._fs._isabs(r'dir\subdir'))
+	def test_stat_nonexistent_symlink(self):
+		with TemporaryDirectory() as tmp_dir:
+			path = Path(tmp_dir, 'symlink')
+			path.symlink_to('nonexistent')
+			urlpath = splitscheme(as_url(path))[1]
+			self._fs.stat(urlpath)
 	def setUp(self):
 		super().setUp()
 		self._fs = LocalFileSystem()

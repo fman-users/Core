@@ -23,5 +23,6 @@
 	{ "keys": ["Cmd+M"], "command": "minimize" },
 	{ "keys": ["Cmd+Q"], "command": "quit" },
 	{ "keys": ["Cmd+Up"], "command": "go_up" },
-	{ "keys": ["Shift+Space"], "command": "quick_look" }
+	{ "keys": ["Shift+Space"], "command": "quick_look" },
+	{ "keys": ["Cmd+Enter"], "command": "open_selected_files" }
 ]

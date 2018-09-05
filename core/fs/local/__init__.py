@@ -48,7 +48,7 @@ class LocalFileSystem(FileSystem):
 		os_path = self._url_to_os_path(path)
 		if not self._isabs(os_path):
 			raise filenotfounderror(path)
-		return os.stat(os_path)
+		return os.stat(os_path, follow_symlinks=False)
 	def size_bytes(self, path):
 		return self.stat(path).st_size
 	def modified_datetime(self, path):
