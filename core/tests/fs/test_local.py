@@ -2,6 +2,7 @@ from fman import PLATFORM
 from fman.url import join, as_url, splitscheme
 from core import LocalFileSystem
 from pathlib import Path
+from stat import S_IWRITE
 from tempfile import TemporaryDirectory
 from unittest import TestCase, skipIf
 
@@ -72,6 +73,13 @@ class LocalFileSystemTest(TestCase):
 			path.symlink_to('nonexistent')
 			urlpath = splitscheme(as_url(path))[1]
 			self._fs.stat(urlpath)
+	def test_delete_readonly_file(self):
+		with TemporaryDirectory() as tmp_dir:
+			path = Path(tmp_dir, 'file')
+			path.touch()
+			path.chmod(path.stat().st_mode ^ S_IWRITE)
+			urlpath = splitscheme(as_url(path))[1]
+			self._fs.delete(urlpath)
 	def setUp(self):
 		super().setUp()
 		self._fs = LocalFileSystem()

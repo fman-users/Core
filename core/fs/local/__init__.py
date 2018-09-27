@@ -13,7 +13,7 @@ from os.path import islink, samestat, isabs, splitdrive
 from pathlib import Path
 from PyQt5.QtCore import QFileSystemWatcher
 from shutil import copystat
-from stat import S_ISDIR
+from stat import S_ISDIR, S_IWRITE
 
 import os
 
@@ -150,7 +150,21 @@ class LocalFileSystem(FileSystem):
 			fn=self._do_delete, args=(path, delete_fn)
 		)
 	def _do_delete(self, path, delete_fn):
-		delete_fn(path)
+		os_path = self._url_to_os_path(path)
+		try:
+			delete_fn(os_path)
+		except OSError as orig_exc:
+			try:
+				mode = self.stat(path).st_mode
+			except OSError:
+				mode = 0
+			if not (mode & S_IWRITE):
+				try:
+					Path(os_path).chmod(mode | S_IWRITE)
+				except OSError:
+					raise orig_exc
+				# Try again, now the file is writeable:
+				delete_fn(os_path)
 		self.notify_file_removed(path)
 	def resolve(self, path):
 		path = self._url_to_os_path(path)
