@@ -4,7 +4,7 @@ from core.os_ import open_terminal_in_directory, open_native_file_manager, \
 	get_popen_kwargs_for_opening
 from core.util import strformat_dict_values, listdir_absolute, is_parent
 from core.quicksearch_matchers import path_starts_with, basename_starts_with, \
-	contains_chars, contains_chars_after_separator
+	contains_chars, contains_chars_after_separator, contains_substring
 from fman import *
 from fman.fs import exists, touch, mkdir, is_dir, delete, samefile, copy, \
 	iterdir, resolve, prepare_copy, prepare_move, prepare_delete, \
@@ -1147,8 +1147,8 @@ def unexpand_user(path, expanduser_=expanduser):
 class SuggestLocations:
 
 	_MATCHERS = (
-		path_starts_with, basename_starts_with,
-		contains_chars_after_separator(os.sep), contains_chars
+		path_starts_with, basename_starts_with, contains_substring,
+		contains_chars
 	)
 
 	class LocalFileSystem:
@@ -2266,3 +2266,17 @@ if PLATFORM == 'Mac':
 			args = ['qlmanage', '-p']
 			args.extend(map(as_human_readable, files))
 			Popen(args, stdout=DEVNULL, stderr=DEVNULL)
+
+if PLATFORM == 'Windows':
+	class GoToRootOfCurrentDrive(DirectoryPaneCommand):
+		def __call__(self):
+			url = self.pane.get_path()
+			scheme = splitscheme(url)[0]
+			if scheme == 'file://':
+				dest = as_url(PurePath(as_human_readable(url)).anchor)
+			else:
+				dest = scheme
+			try:
+				self.pane.set_path(dest)
+			except FileNotFoundError:
+				pass

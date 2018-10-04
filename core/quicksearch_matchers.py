@@ -26,6 +26,13 @@ def contains_chars(text, query):
 		i += 1
 	return indices
 
+def contains_substring(text, query):
+	try:
+		start = text.index(query)
+	except ValueError:
+		return None
+	return list(range(start, start + len(query)))
+
 def contains_chars_after_separator(separator):
 	def result(text, query):
 		result_ = []

@@ -299,7 +299,7 @@ class SuggestLocationsTest(TestCase):
 	def test_empty_suggests_recent_locations(self):
 		expected_paths = [
 			'~/Dropbox/Work', '~/Dropbox', '~/Downloads', '~/Dropbox/Private',
-			'~'
+			'~/s-u-b-s-t-r', '~/My-substr', '~'
 		]
 		self._check_query_returns(
 			'', expected_paths, [[]] * len(expected_paths)
@@ -309,18 +309,15 @@ class SuggestLocationsTest(TestCase):
 			'dow', ['~/Downloads', '~/Dropbox/Work'], [[2, 3, 4], [2, 4, 10]]
 		)
 	def test_exact_match_takes_precedence(self):
-		expected_paths = \
-			['~', '~/Dropbox', '~/Downloads', '~/.hidden', '~/Unvisited']
+		expected_paths = [
+			'~', '~/Dropbox', '~/Downloads', '~/s-u-b-s-t-r', '~/My-substr',
+			'~/.hidden', '~/Unvisited'
+		]
 		self._check_query_returns(
 			'~', expected_paths, [[0]] * len(expected_paths)
 		)
 	def test_prefix_match(self):
 		self._check_query_returns('~/dow', ['~/Downloads'], [[0, 1, 2, 3, 4]])
-	def test_matches_upper_characters(self):
-		self._check_query_returns(
-			'dp', ['~/Dropbox/Private', '~/Dropbox/Work', '~/Dropbox'],
-			[[2, 10], [2, 5], [2, 5]]
-		)
 	def test_existing_path(self):
 		self._check_query_returns(
 			'~/Unvisited', ['~/Unvisited', '~/Unvisited/Dir']
@@ -350,6 +347,12 @@ class SuggestLocationsTest(TestCase):
 			os.path.dirname(self.home_dir),
 			[os.path.dirname(self.home_dir), self.home_dir]
 		)
+	def test_substring(self):
+		# Should return My-substr before ~/s-u-b-s-t-r even though the latter
+		# has a higher count:
+		self._check_query_returns(
+			'sub', ['~/My-substr', '~/s-u-b-s-t-r'], [[5, 6, 7], [2, 4, 6]]
+		)
 	def setUp(self):
 		root = 'C:' if PLATFORM == 'Windows' else ''
 		files = {
@@ -363,7 +366,9 @@ class SuggestLocationsTest(TestCase):
 						},
 						'Unvisited': {
 							'Dir': {}
-						}
+						},
+						'My-substr': {},
+						's-u-b-s-t-r': {},
 					}
 				}
 			},
@@ -378,10 +383,12 @@ class SuggestLocationsTest(TestCase):
 			self._replace_pathsep(self.fs.expanduser(k)): v
 			for k, v in [
 				('~', 1),
-				('~/Downloads', 3),
-				('~/Dropbox', 4),
-				('~/Dropbox/Work', 5),
-				('~/Dropbox/Private', 2)
+				('~/Downloads', 5),
+				('~/Dropbox', 6),
+				('~/Dropbox/Work', 7),
+				('~/Dropbox/Private', 4),
+				('~/My-substr', 2),
+				('~/s-u-b-s-t-r', 3) # Note: Higher count than My-substr
 			]
 		}
 		self.instance = SuggestLocations(visited_paths, self.fs)
