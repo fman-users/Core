@@ -7,8 +7,7 @@ import os
 
 def is_arch():
 	try:
-		with open('/etc/issue', 'r') as f:
-			return f.read().startswith('Arch Linux ')
+		return _get_os_release_name().startswith('Arch Linux')
 	except FileNotFoundError:
 		return False
 
@@ -26,7 +25,8 @@ def open_terminal_in_directory(dir_path):
 	else:
 		alternatives = [
 			'x-terminal-emulator', # Debian-based
-			'konsole'              # KDE
+			'konsole',             # KDE
+			'gnome-terminal'       # Gnome-based / Fedora
 		]
 		for alternative in alternatives:
 			binary = which(alternative)
@@ -52,7 +52,7 @@ def open_native_file_manager(dir_path):
 		if xdg_open:
 			app = {'args': [xdg_open, '{curr_dir}']}
 			_run_app_from_setting(app, dir_path)
-			if _is_gnome_based():
+			if _is_ubuntu():
 				try:
 					fpl = \
 						check_output(['dconf', 'read', _FOCUS_PREVENTION_LEVEL])
@@ -75,6 +75,12 @@ def open_native_file_manager(dir_path):
 				'<a href="https://fman.io/docs/terminal?s=f">here</a>.'
 			)
 
+def _is_ubuntu():
+	try:
+		return _get_os_release_name().startswith('Ubuntu')
+	except FileNotFoundError:
+		return False
+
 def _run_app_from_setting(app, curr_dir):
 	popen_kwargs = strformat_dict_values(app, {'curr_dir': curr_dir})
 	Popen(**popen_kwargs)
@@ -82,6 +88,14 @@ def _run_app_from_setting(app, curr_dir):
 def _is_gnome_based():
 	curr_desktop = os.environ.get('XDG_CURRENT_DESKTOP', '').lower()
 	return curr_desktop in ('unity', 'gnome', 'x-cinnamon')
+
+def _get_os_release_name():
+	with open('/etc/os-release', 'r') as f:
+		for line in f:
+			line = line.rstrip()
+			if line.startswith('NAME='):
+				name = line[len('NAME='):]
+				return name.strip('"')
 
 _FOCUS_PREVENTION_LEVEL = \
 	'/org/compiz/profiles/unity/plugins/core/focus-prevention-level'
