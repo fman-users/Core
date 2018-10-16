@@ -115,7 +115,8 @@ class FileTreeOperation(Task):
 				except OSError:
 					dst_is_dir = False
 				if dst_is_dir:
-					self._merge_directory(file_url)
+					if not self._merge_directory(file_url):
+						return False
 				else:
 					self._enqueue(self._prepare_transfer(file_url, dst))
 			else:

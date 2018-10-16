@@ -115,8 +115,8 @@ class FileTreeOperationAT:
 		)
 	def test_overwrite_directory_abort(self):
 		self.test_overwrite_files(
-			(ABORT,), (False, False), files=('dir/a.txt', 'b.txt'),
-			perform_on_files=('dir', 'b.txt')
+			(ABORT,), (False, False,), files=('dir/a/a.txt', 'dir/b/b.txt'),
+			perform_on_files=('dir',)
 		)
 	def test_move_to_self(self):
 		a, b = join(self.dest, 'a'), join(self.dest, 'b')
