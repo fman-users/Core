@@ -8,9 +8,9 @@ from core.quicksearch_matchers import path_starts_with, basename_starts_with, \
 from fman import *
 from fman.fs import exists, touch, mkdir, is_dir, delete, samefile, copy, \
 	iterdir, resolve, prepare_copy, prepare_move, prepare_delete, \
-	FileSystem, prepare_trash, query
+	FileSystem, prepare_trash, query, makedirs
 from fman.url import splitscheme, as_url, join, basename, as_human_readable, \
-	dirname
+	dirname, relpath
 from getpass import getuser
 from io import UnsupportedOperation
 from itertools import chain, islice
@@ -769,15 +769,25 @@ class CreateDirectory(DirectoryPaneCommand):
 			default = ''
 		name, ok = show_prompt("New folder (directory)", default)
 		if ok and name:
-			dir_url = join(self.pane.get_path(), name)
+			# Support recursive creation of directories:
+			if PLATFORM == 'Windows':
+				name = name.replace('\\', '/')
+			base_url = self.pane.get_path()
+			dir_url = join(base_url, name)
 			try:
-				mkdir(dir_url)
+				makedirs(dir_url)
 			except FileExistsError:
 				show_alert("A file with this name already exists!")
 			try:
-				self.pane.place_cursor_at(dir_url)
-			except ValueError as dir_disappeared:
-				pass
+				effective_url = resolve(dir_url)
+			except OSError:
+				return
+			select = relpath(effective_url, base_url).split('/')[0]
+			if select != '..':
+				try:
+					self.pane.place_cursor_at(join(base_url, select))
+				except ValueError as dir_disappeared:
+					pass
 	def is_visible(self):
 		fs = splitscheme(self.pane.get_path())[0]
 		return _fs_implements(fs, 'mkdir')
