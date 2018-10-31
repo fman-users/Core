@@ -24,5 +24,6 @@
 	{ "keys": ["Cmd+Q"], "command": "quit" },
 	{ "keys": ["Cmd+Up"], "command": "go_up" },
 	{ "keys": ["Shift+Space"], "command": "quick_look" },
-	{ "keys": ["Cmd+Enter"], "command": "open_selected_files" }
+	{ "keys": ["Cmd+Enter"], "command": "open_selected_files" },
+	{ "keys": ["Cmd+Ctrl+F"], "command": "toggle_fullscreen"}
 ]
