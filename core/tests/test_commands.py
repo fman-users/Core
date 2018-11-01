@@ -1,5 +1,6 @@
 from core.commands import SuggestLocations, History, Move, \
-	_from_human_readable, get_dest_suggestion, _find_extension_start
+	_from_human_readable, get_dest_suggestion, _find_extension_start, \
+	_get_shortcuts_for_command
 from core.tests import StubUI
 from core.util import filenotfounderror
 from fman import OK, YES, NO, PLATFORM
@@ -404,6 +405,28 @@ class SuggestLocationsTest(TestCase):
 		return path.replace('/', os.sep)
 	def _full_range(self, string):
 		return list(range(len(string)))
+
+class GetShortcutsForCommandTest(TestCase):
+	def test_no_shortcut(self):
+		self._check([{'keys': ['Enter'], 'command': 'open'}], 'copy', [])
+	def test_simple(self):
+		self._check([{'keys': ['Enter'], 'command': 'open'}], 'open', ['Enter'])
+	def test_two_shortcuts(self):
+		self._check(
+			[{'keys': ['Enter'], 'command': 'open'},
+			 {'keys': ['Down'], 'command': 'open'}],
+			'open', ['Enter', 'Down']
+		)
+	def test_shortcut_only_displayed_for_one_command(self):
+		bindings = [
+			{'keys': ['Enter'], 'command': 'open'},
+			{'keys': ['Enter'], 'command': 'alternative'}
+		]
+		self._check(bindings, 'open', ['Enter'])
+		self._check(bindings, 'alternative', [])
+	def _check(self, key_bindings, command, expected_shortcuts):
+		actual = list(_get_shortcuts_for_command(key_bindings, command))
+		self.assertEqual(expected_shortcuts, actual)
 
 class HistoryTest(TestCase):
 	def test_empty_back(self):

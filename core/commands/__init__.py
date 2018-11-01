@@ -1358,13 +1358,15 @@ class CommandPalette(DirectoryPaneCommand):
 			self._last_query = self._last_cmd_name = ''
 	def _suggest_commands(self, query):
 		result = [[] for _ in self._MATCHERS]
+		key_bindings = load_json('Key Bindings.json')
 		for cmd_name, aliases, command in self._get_all_commands():
 			for alias in aliases:
 				this_alias_matched = False
 				for i, matcher in enumerate(self._MATCHERS):
 					highlight = matcher(alias.lower(), query.lower())
 					if highlight is not None:
-						shortcuts = _get_shortcuts_for_command(cmd_name)
+						shortcuts = \
+							_get_shortcuts_for_command(key_bindings, cmd_name)
 						hint = ', '.join(shortcuts)
 						item = QuicksearchItem(command, alias, highlight, hint)
 						result[i].append(item)
@@ -1390,28 +1392,29 @@ class CommandPalette(DirectoryPaneCommand):
 			result.append((cmd_name, aliases, command))
 		return result
 
-def _get_shortcuts_for_command(command):
-	for binding in load_json('Key Bindings.json'):
+def _get_shortcuts_for_command(key_bindings, command):
+	shortcuts_occupied_by_other_commands = set()
+	for binding in key_bindings:
 		try:
 			binding_cmd = binding['command']
 		except (KeyError, TypeError):
 			# Malformed Key Bindings.json
 			continue
-		else:
-			if binding_cmd != command:
-				continue
 		try:
 			shortcut = binding['keys'][0]
 		except (KeyError, IndexError, TypeError):
 			# Malformed Key Bindings.json
 			continue
-		else:
-			if not isinstance(shortcut, str):
-				# Malformed Key Bindings.json
-				continue
-			if PLATFORM == 'Mac':
-				shortcut = _insert_mac_key_symbols(shortcut)
-			yield shortcut
+		if not isinstance(shortcut, str):
+			# Malformed Key Bindings.json
+			continue
+		if binding_cmd == command:
+			if shortcut not in shortcuts_occupied_by_other_commands:
+				if PLATFORM == 'Mac':
+					yield _insert_mac_key_symbols(shortcut)
+				else:
+					yield shortcut
+		shortcuts_occupied_by_other_commands.add(shortcut)
 
 def _insert_mac_key_symbols(shortcut):
 	keys = shortcut.split('+')
@@ -2259,6 +2262,17 @@ class RemoveApp(QuicksearchScreen):
 		show_alert('%s was removed from your favorite apps.' % app)
 	def on_cancelled(self):
 		Configure(self._files).show()
+
+class none(DirectoryPaneCommand):
+	"""
+	Assign key bindings to this command to effectively deactivate them.
+	This is a DirectoryPaneCommand because ApplicationCommand currently does not
+	support is_visible().
+	"""
+	def __call__(self):
+		pass
+	def is_visible(self):
+		return False
 
 if PLATFORM == 'Mac':
 	class QuickLook(DirectoryPaneCommand):
