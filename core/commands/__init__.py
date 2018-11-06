@@ -1367,6 +1367,8 @@ class CommandPalette(DirectoryPaneCommand):
 					if highlight is not None:
 						shortcuts = \
 							_get_shortcuts_for_command(key_bindings, cmd_name)
+						if PLATFORM == 'Mac':
+							shortcuts = map(_insert_mac_key_symbols, shortcuts)
 						hint = ', '.join(shortcuts)
 						item = QuicksearchItem(command, alias, highlight, hint)
 						result[i].append(item)
@@ -1410,10 +1412,7 @@ def _get_shortcuts_for_command(key_bindings, command):
 			continue
 		if binding_cmd == command:
 			if shortcut not in shortcuts_occupied_by_other_commands:
-				if PLATFORM == 'Mac':
-					yield _insert_mac_key_symbols(shortcut)
-				else:
-					yield shortcut
+				yield shortcut
 		shortcuts_occupied_by_other_commands.add(shortcut)
 
 def _insert_mac_key_symbols(shortcut):
