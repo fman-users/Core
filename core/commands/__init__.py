@@ -10,7 +10,7 @@ from fman.fs import exists, touch, mkdir, is_dir, delete, samefile, copy, \
 	iterdir, resolve, prepare_copy, prepare_move, prepare_delete, \
 	FileSystem, prepare_trash, query, makedirs
 from fman.url import splitscheme, as_url, join, basename, as_human_readable, \
-	dirname, relpath
+	dirname, relpath, resolve_syntactically
 from getpass import getuser
 from io import UnsupportedOperation
 from itertools import chain, islice
@@ -778,10 +778,13 @@ class CreateDirectory(DirectoryPaneCommand):
 				makedirs(dir_url)
 			except FileExistsError:
 				show_alert("A file with this name already exists!")
-			try:
-				effective_url = resolve(dir_url)
-			except OSError:
-				return
+			# Resolve *syntactically* to avoid the following problem:
+			# Say c/ is a symlink to a/b/. We're inside c/ and create d. Then
+			# resolve(c/d) would give a/b/d and the relative path further down
+			# would be ../a/b/d. We could not place the cursor at that. If on
+			# the other hand, we resolve syntactically, then we compute the
+			# relpath from c -> c/d, which does work.
+			effective_url = resolve_syntactically(dir_url)
 			select = relpath(effective_url, base_url).split('/')[0]
 			if select != '..':
 				try:
@@ -2261,6 +2264,44 @@ class RemoveApp(QuicksearchScreen):
 		show_alert('%s was removed from your favorite apps.' % app)
 	def on_cancelled(self):
 		Configure(self._files).show()
+
+class CompareDirectories(DirectoryPaneCommand):
+	def __call__(self):
+		this = self.pane
+		panes = this.window.get_panes()
+		this_index = panes.index(this)
+		other_index = (this_index + 1) % len(panes)
+		left = panes[min(this_index, other_index)]
+		right = panes[max(this_index, other_index)]
+		res_left = self._select_nonexistent_in_other(left, right)
+		res_right = self._select_nonexistent_in_other(right, left)
+		if res_left == res_right == 0:
+			message = 'The directories contain the same file <em>names</em>.' \
+			          '<br/>(Did not compare contents, Size or Modified.)'
+		else:
+			msg_parts = []
+			def report(count, l, r):
+				if count:
+					msg_parts.append(
+						'The %s pane contains %d file%s not present on the %s.'
+						% (l, count, '' if count == 1 else 's', r)
+					)
+			report(res_left, 'left', 'right')
+			report(res_right, 'right', 'left')
+			message = '<br/>'.join(msg_parts)
+		show_alert(message)
+	def _select_nonexistent_in_other(self, this, other):
+		result = 0
+		this.clear_selection()
+		other_files = set(iterdir(other.get_path()))
+		for f in iterdir(this.get_path()):
+			if f not in other_files:
+				try:
+					this.toggle_selection(join(this.get_path(), f))
+					result += 1
+				except ValueError:
+					pass
+		return result
 
 class none(DirectoryPaneCommand):
 	"""
