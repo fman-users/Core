@@ -1,6 +1,6 @@
 from core.commands import SuggestLocations, History, Move, \
 	_from_human_readable, get_dest_suggestion, _find_extension_start, \
-	_get_shortcuts_for_command
+	_get_shortcuts_for_command, _shrink_visited_paths
 from core.tests import StubUI
 from core.util import filenotfounderror
 from fman import OK, YES, NO, PLATFORM
@@ -220,6 +220,16 @@ class FromHumanReadableTest(TestCase):
 			as_url(path),
 			_from_human_readable(path, dir_url, None)
 		)
+
+class ShrinkVisiblePathsTest(TestCase):
+	def test_basic(self):
+		vps = {'a': 1, 'b': 2, 'c': 3, 'd': 4, 'e': 5}
+		_shrink_visited_paths(vps, 3)
+		self.assertEqual({'c': 1, 'd': 2, 'e': 3}, vps)
+	def test_multiple_similar(self):
+		vps = {'a': 1, 'b': 1, 'c': 3, 'd': 3, 'e': 5}
+		_shrink_visited_paths(vps, 3)
+		self.assertEqual({'c': 1, 'd': 1, 'e': 2}, vps)
 
 class SuggestLocationsTest(TestCase):
 

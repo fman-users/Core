@@ -1,6 +1,6 @@
 from fman.fs import FileSystem, cached
 from fman.impl.util import filenotfounderror
-from fman.impl.util.path import resolve
+from fman.impl.util.path import normalize
 
 class StubFileSystem(FileSystem):
 
@@ -10,10 +10,10 @@ class StubFileSystem(FileSystem):
 		super().__init__()
 		self._items = items
 	def exists(self, path):
-		return resolve(path) in self._items
+		return normalize(path) in self._items
 	@cached # Mirror a typical implementation
 	def is_dir(self, existing_path):
-		path_resolved = resolve(existing_path)
+		path_resolved = normalize(existing_path)
 		try:
 			item = self._items[path_resolved]
 		except KeyError:
@@ -21,12 +21,12 @@ class StubFileSystem(FileSystem):
 		return item.get('is_dir', False)
 	@cached # Mirror a typical implementation
 	def size_bytes(self, path):
-		return self._items[resolve(path)].get('size', 1)
+		return self._items[normalize(path)].get('size', 1)
 	@cached # Mirror a typical implementation
 	def modified_datetime(self, path):
-		return self._items[resolve(path)].get('mtime', 1473339041.0)
+		return self._items[normalize(path)].get('mtime', 1473339041.0)
 	def touch(self, path):
 		file_existed = self.exists(path)
-		self._items[resolve(path)] = {}
+		self._items[normalize(path)] = {}
 		if not file_existed:
 			self.notify_file_added(path)

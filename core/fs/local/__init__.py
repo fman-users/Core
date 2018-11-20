@@ -176,15 +176,7 @@ class LocalFileSystem(FileSystem):
 				# Python can handle \\server\folder but not \\server. Defer to
 				# the network:// file system.
 				return 'network://' + path[2:]
-		try:
-			path = Path(path).resolve()
-		except FileNotFoundError:
-			# TODO: Remove this except block once we upgraded to Python >= 3.6.
-			# In Python 3.5 on Windows, Path#resolve(...) raises
-			# FileNotFoundError for virtual drives such as for instance X:
-			# created by BoxCryptor.
-			if not Path(path).exists():
-				raise
+		path = Path(path).resolve()
 		return as_url(path)
 	def samefile(self, path1, path2):
 		return samestat(self.stat(path1), self.stat(path2))
