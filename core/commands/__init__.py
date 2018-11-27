@@ -80,6 +80,7 @@ class MoveCursorPageDown(DirectoryPaneCommand):
 class ToggleSelection(DirectoryPaneCommand):
 	def __call__(self):
 		file_under_cursor = self.pane.get_file_under_cursor()
+		self.pane.deselect(file_under_cursor)
 		if file_under_cursor:
 			self.pane.toggle_selection(file_under_cursor)
 
@@ -840,19 +841,24 @@ class CopyPathsToClipboard(DirectoryPaneCommand):
 		files = '\n'.join(to_copy)
 		clipboard.clear()
 		clipboard.set_text(files)
-		num = len(to_copy)
-		if num == 1:
-			status_msg = 'Copied "%s" to clipboard.' % to_copy[0]
-		else:
-			status_msg = 'Copied "%s" and %d other path%s to clipboard.' \
-						 % (to_copy[0], num - 1, 's' if num > 2 else '')
-		show_status_message(status_msg, timeout_secs=3)
+		_report_clipboard_action('Copied', to_copy, ' to the clipboard', 'path')
+
+def _report_clipboard_action(verb, files, suffix='', ftype='file'):
+	num = len(files)
+	if num == 1:
+		message = '%s "%s"%s.' % (verb, files[0], suffix)
+	else:
+		plural = 's' if num > 2 else ''
+		message = '%s "%s" and %d other %s%s%s.' % \
+				  (verb, files[0], num - 1, ftype, plural, suffix)
+	show_status_message(message, timeout_secs=3)
 
 class CopyToClipboard(DirectoryPaneCommand):
 	def __call__(self):
 		files = self.get_chosen_files()
 		if files:
 			clipboard.copy_files(files)
+			_report_clipboard_action('Copying', files)
 		else:
 			show_alert('No file is selected!')
 	def is_visible(self):
@@ -869,6 +875,7 @@ class Cut(DirectoryPaneCommand):
 		files = self.get_chosen_files()
 		if files:
 			clipboard.cut_files(files)
+			_report_clipboard_action('Cutting', files)
 		else:
 			show_alert('No file is selected!')
 	def is_visible(self):
@@ -906,6 +913,15 @@ class SelectAll(DirectoryPaneCommand):
 class Deselect(DirectoryPaneCommand):
 	def __call__(self):
 		self.pane.clear_selection()
+
+class InvertSelection(DirectoryPaneCommand):
+	def __call__(self, *args, **kwargs):
+		url = self.pane.get_path()
+		all_files = (join(url, fname) for fname in iterdir(url))
+		to_deselect = set(self.pane.get_selected_files())
+		to_select = (f for f in all_files if f not in to_deselect)
+		self.pane.deselect(to_deselect)
+		self.pane.select(to_select)
 
 class ToggleHiddenFiles(DirectoryPaneCommand):
 
@@ -2310,17 +2326,12 @@ class CompareDirectories(DirectoryPaneCommand):
 			message = '<br/>'.join(msg_parts)
 		show_alert(message)
 	def _select_nonexistent_in_other(self, this, other):
-		result = 0
 		this.clear_selection()
 		other_files = set(iterdir(other.get_path()))
-		for f in iterdir(this.get_path()):
-			if f not in other_files:
-				try:
-					this.toggle_selection(join(this.get_path(), f))
-					result += 1
-				except ValueError:
-					pass
-		return result
+		url = this.get_path()
+		nonexistent = set(f for f in iterdir(url) if f not in other_files)
+		this.select(join(url, f) for f in nonexistent)
+		return len(nonexistent)
 
 class none(DirectoryPaneCommand):
 	"""

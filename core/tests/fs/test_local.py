@@ -80,6 +80,14 @@ class LocalFileSystemTest(TestCase):
 			path.chmod(path.stat().st_mode ^ S_IWRITE)
 			urlpath = splitscheme(as_url(path))[1]
 			self._fs.delete(urlpath)
+	def test_delete_symlink_to_directory(self):
+		with TemporaryDirectory() as tmp_dir:
+			a = Path(tmp_dir, 'a')
+			a.mkdir()
+			b = Path(tmp_dir, 'b')
+			b.symlink_to(a)
+			self._fs.delete(splitscheme(as_url(b))[1])
+			self.assertFalse(b.exists(), 'Failed to delete symlink to folder')
 	def setUp(self):
 		super().setUp()
 		self._fs = LocalFileSystem()

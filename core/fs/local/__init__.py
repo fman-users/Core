@@ -136,7 +136,13 @@ class LocalFileSystem(FileSystem):
 		for task in self.prepare_delete(path):
 			task()
 	def prepare_delete(self, path):
-		if self.is_dir(path):
+		os_path = self._url_to_os_path(path)
+		if not self._isabs(os_path):
+			raise filenotfounderror(path)
+		# is_dir(...) follows symlinks. But if `path` is a symlink, we need to
+		# use remove(...) instead of rmdir(...) to avoid NotADirectoryError.
+		# So check if `path` is a symlink:
+		if self.is_dir(path) and not islink(os_path):
 			for name in self.iterdir(path):
 				try:
 					yield from self.prepare_delete(path + '/' + name)
