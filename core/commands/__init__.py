@@ -832,14 +832,10 @@ class OpenNativeFileManager(DirectoryPaneCommand):
 
 class CopyPathsToClipboard(DirectoryPaneCommand):
 	def __call__(self):
-		chosen_files = self.get_chosen_files()
-		if chosen_files:
-			to_copy = [as_human_readable(url) for url in chosen_files]
-		else:
-			to_copy = [as_human_readable(self.pane.get_path())]
+		to_copy = self.get_chosen_files() or [self.pane.get_path()]
 		files = '\n'.join(to_copy)
 		clipboard.clear()
-		clipboard.set_text(files)
+		clipboard.set_text('\n'.join(map(as_human_readable, to_copy)))
 		_report_clipboard_action('Copied', to_copy, ' to the clipboard', 'path')
 
 def _report_clipboard_action(verb, files, suffix='', ftype='file'):

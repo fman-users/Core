@@ -15,6 +15,7 @@ from PyQt5.QtCore import QFileSystemWatcher
 from shutil import copystat
 from stat import S_ISDIR, S_IWRITE
 
+import errno
 import os
 
 if PLATFORM == 'Windows':
@@ -182,7 +183,17 @@ class LocalFileSystem(FileSystem):
 				# Python can handle \\server\folder but not \\server. Defer to
 				# the network:// file system.
 				return 'network://' + path[2:]
-		path = Path(path).resolve()
+		p = Path(path)
+		try:
+			path = p.resolve(strict=True)
+		except FileNotFoundError:
+			if not p.exists():
+				raise
+		except OSError as e:
+			# We for instance get errno.EINVAL ("[WinError 1]") when trying to
+			# resolve folders on Cryptomator drives on Windows. Ignore it:
+			if e.errno != errno.EINVAL:
+				raise
 		return as_url(path)
 	def samefile(self, path1, path2):
 		return samestat(self.stat(path1), self.stat(path2))
