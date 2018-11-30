@@ -365,10 +365,10 @@ class OpenWithEditor(DirectoryPaneCommand):
 	def __call__(self, url=None):
 		if url is None:
 			url = self.pane.get_file_under_cursor()
-		url = resolve(url)
 		if not url:
 			show_alert('No file is selected!')
 			return
+		url = resolve(url)
 		scheme, path = splitscheme(url)
 		if scheme != 'file://':
 			show_alert(
