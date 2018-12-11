@@ -1,5 +1,5 @@
 from core.fileoperations import CopyFiles, MoveFiles
-from core.tests import StubUI, StubFS
+from core.tests import StubFS
 from fman import YES, NO, OK, YES_TO_ALL, NO_TO_ALL, ABORT, PLATFORM
 from fman.url import join, dirname, as_url, as_human_readable
 from os.path import exists
