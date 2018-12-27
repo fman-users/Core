@@ -499,6 +499,7 @@ class _TreeCommand(DirectoryPaneCommand):
 		proceed = self._confirm_tree_operation(files, dest_dir, src_dir)
 		if proceed:
 			dest_dir, dest_name = proceed
+			makedirs(dest_dir, exist_ok=True)
 			self._call(files, dest_dir, src_dir, dest_name)
 	def _call(self, files, dest_dir, src_dir=None, dest_name=None):
 		raise NotImplementedError()
