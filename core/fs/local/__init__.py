@@ -232,9 +232,18 @@ class LocalFileSystem(FileSystem):
 		# Instantiate QFileSystemWatcher as late as possible. It requires a
 		# QApplication which isn't available in some tests.
 		if self._watcher is None:
-			self._watcher = QFileSystemWatcher()
-			self._watcher.directoryChanged.connect(self._on_file_changed)
-			self._watcher.fileChanged.connect(self._on_file_changed)
+			if PLATFORM == 'Windows':
+				# On Windows, QFileSystemWatcher keeps excessive locks on files
+				# and directories. This sometimes makes it impossible for fman
+				# or other apps to access them properly. One example of this are
+				# USB drives that can't be ejected as long as fman is running.
+				# So don't watch files on Windows for now, perhaps until we have
+				# a better implementation.
+				self._watcher = StubFileSystemWatcher()
+			else:
+				self._watcher = QFileSystemWatcher()
+				self._watcher.directoryChanged.connect(self._on_file_changed)
+				self._watcher.fileChanged.connect(self._on_file_changed)
 		return self._watcher
 	def _on_file_changed(self, file_path):
 		path_forward_slashes = splitscheme(as_url(file_path))[1]
@@ -284,3 +293,9 @@ class CopyFile(Task):
 		copystat(src, dst, follow_symlinks=False)
 		if not dst_existed:
 			self._fs.notify_file_added(dst_urlpath)
+
+class StubFileSystemWatcher:
+	def addPath(self, path):
+		pass
+	def removePath(self, path):
+		pass
