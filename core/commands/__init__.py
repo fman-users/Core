@@ -291,11 +291,11 @@ class OpenDirectory(DirectoryPaneCommand):
 
 class OpenFile(DirectoryPaneCommand):
 	def __call__(self, url):
-		_open_files([url])
+		_open_files([url], self.pane)
 	def is_visible(self):
 		return False
 
-def _open_files(urls):
+def _open_files(urls, pane):
 	local_file_paths = []
 	for url in urls:
 		try:
@@ -320,9 +320,9 @@ def _open_files(urls):
 		# above to get backslashes on Windows:
 		local_file_paths.append(as_human_readable(url))
 	for path in local_file_paths:
-		_open_local_file(path)
+		_open_local_file(path, pane)
 
-def _open_local_file(path):
+def _open_local_file(path, pane):
 	if PLATFORM == 'Windows':
 		# Whichever implementation is used here, it should support:
 		#  * C:\picture.jpg
@@ -334,6 +334,14 @@ def _open_local_file(path):
 		#  * \\server\share\picture.jpg
 		#  * D:\Book.pdf
 		#  * \\cryptomator-vault\app.exe
+		if path.endswith('.lnk'):
+			import win32com.client
+			shell = win32com.client.Dispatch("WScript.Shell")
+			shortcut = shell.CreateShortCut(path)
+			target_url = as_url(shortcut.TargetPath)
+			if is_dir(target_url):
+				pane.set_path(target_url)
+				return
 		try:
 			from win32api import ShellExecute
 			from win32con import SW_SHOWNORMAL
@@ -355,9 +363,9 @@ class OpenSelectedFiles(DirectoryPaneCommand):
 		file_under_cursor = self.pane.get_file_under_cursor()
 		selected_files = self.pane.get_selected_files()
 		if file_under_cursor in selected_files:
-			_open_files(selected_files)
+			_open_files(selected_files, self.pane)
 		else:
-			_open_files([file_under_cursor])
+			_open_files([file_under_cursor], self.pane)
 	def is_visible(self):
 		return bool(self.get_chosen_files())
 
