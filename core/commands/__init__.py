@@ -319,21 +319,29 @@ def _open_files(urls, pane):
 		# Use as_human_readable(...) instead of the result from splitscheme(...)
 		# above to get backslashes on Windows:
 		local_file_paths.append(as_human_readable(url))
-	for path in local_file_paths:
-		_open_local_file(path, pane)
+	_open_local_files(local_file_paths, pane)
 
-def _open_local_file(path, pane):
+def _open_local_files(paths, pane):
 	if PLATFORM == 'Windows':
-		# Whichever implementation is used here, it should support:
-		#  * C:\picture.jpg
-		#  * C:\notepad.exe
-		#  * C:\a & b.txt
-		#  * C:\batch.bat should print the current dir:
-		#        echo %cd%
-		#        pause
-		#  * \\server\share\picture.jpg
-		#  * D:\Book.pdf
-		#  * \\cryptomator-vault\app.exe
+		_open_local_files_win(paths, pane)
+	elif PLATFORM == 'Mac':
+		_open_local_files_mac(paths)
+	else:
+		assert PLATFORM == 'Linux'
+		_open_local_files_linux(paths)
+
+def _open_local_files_win(paths, pane):
+	# Whichever implementation is used here, it should support:
+	#  * C:\picture.jpg
+	#  * C:\notepad.exe
+	#  * C:\a & b.txt
+	#  * C:\batch.bat should print the current dir:
+	#        echo %cd%
+	#        pause
+	#  * \\server\share\picture.jpg
+	#  * D:\Book.pdf
+	#  * \\cryptomator-vault\app.exe
+	for path in paths:
 		if path.endswith('.lnk'):
 			import win32com.client
 			shell = win32com.client.Dispatch("WScript.Shell")
@@ -352,11 +360,34 @@ def _open_local_file(path, pane):
 			# Admin privileges, but the user cancels the UAC "do you want to run
 			# this file?" dialog.
 			pass
-	else:
+
+def _open_local_files_mac(paths):
+	non_executables = []
+	for path in paths:
 		try:
-			Popen([path], cwd=os.path.dirname(path))
+			_run_executable(path)
 		except (OSError, ValueError):
-			QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+			non_executables.append(path)
+	if non_executables:
+		try:
+			Popen(['open'] + non_executables, **_quiet)
+		except OSError:
+			pass
+
+def _open_local_files_linux(paths):
+	for path in paths:
+		try:
+			_run_executable(path)
+		except (OSError, ValueError):
+			try:
+				Popen(['xdg-open', path], **_quiet)
+			except Exception as e:
+				raise e from None
+
+def _run_executable(path):
+	Popen([path], cwd=os.path.dirname(path), **_quiet)
+
+_quiet = {'stdout': DEVNULL, 'stderr': DEVNULL}
 
 class OpenSelectedFiles(DirectoryPaneCommand):
 	def __call__(self):

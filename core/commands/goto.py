@@ -1,5 +1,4 @@
-from core.commands.util import get_program_files, get_program_files_x86, \
-	get_user, is_hidden
+from core.commands.util import get_user, is_hidden
 from core.quicksearch_matchers import path_starts_with, basename_starts_with, \
 	contains_substring, contains_chars
 from fman import DirectoryPaneCommand, show_quicksearch, PLATFORM, load_json, \
@@ -8,12 +7,13 @@ from fman.fs import exists, resolve
 from fman.url import as_url, splitscheme, as_human_readable
 from itertools import islice, chain
 from os.path import expanduser, islink, isabs, normpath
-from pathlib import Path
+from pathlib import Path, PurePath
 from random import shuffle
 from time import time
 
 import os
 import re
+import sys
 
 __all__ = ['GoTo', 'GoToListener']
 
@@ -52,36 +52,45 @@ class GoTo(DirectoryPaneCommand):
 	def _get_visited_paths(self):
 		# TODO: Rename to Visited Locations.json?
 		result = load_json('Visited Paths.json', default={})
-		if not result:
+		# Check for length 2 because the directories in which fman opens are
+		# already in Visited Paths:
+		if len(result) <= 2:
 			result.update({
 				path: 0 for path in self._get_default_paths()
 			})
 		return result
-	def _get_default_paths(self):
+	def _get_default_paths(self, exclude={'/proc', '/run', '/sys'}):
 		home_dir = expanduser('~')
-		result = list(self._get_nonhidden_subdirs(home_dir))
-		if PLATFORM == 'Windows':
-			for candidate in (get_program_files(), get_program_files_x86()):
-				if os.path.isdir(candidate):
-					result.append(candidate)
-		elif PLATFORM == 'Mac':
-			result.append('/Volumes')
-		elif PLATFORM == 'Linux':
+		result = set(self._get_nonhidden_subdirs(home_dir))
+		# Add directories in C:\ on Windows, or / on Unix:
+		try:
+			children = Path(PurePath(sys.executable).anchor).iterdir()
+		except OSError:
+			pass
+		else:
+			for child in children:
+				if str(child) in exclude:
+					continue
+				try:
+					if child.is_dir():
+						try:
+							next(iter(child.iterdir()))
+						except StopIteration:
+							pass
+						else:
+							result.add(str(child))
+				except OSError:
+					pass
+		if PLATFORM == 'Linux':
 			media_user = os.path.join('/media', get_user())
 			if os.path.exists(media_user):
-				result.append(media_user)
-			elif os.path.exists('/media'):
-				result.append('/media')
-			if os.path.exists('/mnt'):
-				result.append('/mnt')
+				result.add(media_user)
 			# We need to add more suggestions on Linux, because unlike Windows
 			# and Mac, we (currently) do not integrate with the OS's native
 			# search functionality:
-			result.extend(islice(self._traverse_by_mtime(home_dir), 500))
-			result.extend(
-				islice(self._traverse_by_mtime(
-					'/', exclude={'/proc', '/sys'}), 500
-				)
+			result.update(islice(self._traverse_by_mtime(home_dir), 500))
+			result.update(
+				islice(self._traverse_by_mtime('/', exclude=exclude), 500)
 			)
 		return result
 	def _get_nonhidden_subdirs(self, dir_path):
