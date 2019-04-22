@@ -298,16 +298,21 @@ class OpenFile(DirectoryPaneCommand):
 def _open_files(urls, pane):
 	local_file_paths = []
 	for url in urls:
-		try:
-			url = resolve(url)
-		except FileNotFoundError:
-			# No sense to try to open a file that does not exist.
-			continue
-		except OSError as e:
-			# Not all OSErrors need prevent us from opening the file.
-			# So only skip this file if it does not exist:
-			if e.errno == errno.ENOENT:
+		# On Windows, CMD can handle mapped drives Z:\ but not UNC paths
+		# //192.168.0.2. If the former maps to the latter, then CMD fails to
+		# run .bat files in that location. So only resolve if absolutely
+		# necessary, i.e. when not a file:// URL:
+		if splitscheme(url)[0] != 'file://':
+			try:
+				url = resolve(url)
+			except FileNotFoundError:
+				# No sense to try to open a file that does not exist.
 				continue
+			except OSError as e:
+				# Not all OSErrors need prevent us from opening the file.
+				# So only skip this file if it does not exist:
+				if e.errno == errno.ENOENT:
+					continue
 		scheme = splitscheme(url)[0]
 		if scheme != 'file://':
 			show_alert(
