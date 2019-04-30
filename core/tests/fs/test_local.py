@@ -1,3 +1,4 @@
+from collections import namedtuple
 from fman import PLATFORM
 from fman.url import join, as_url, splitscheme
 from core import LocalFileSystem
@@ -88,6 +89,122 @@ class LocalFileSystemTest(TestCase):
 			b.symlink_to(a)
 			self._fs.delete(splitscheme(as_url(b))[1])
 			self.assertFalse(b.exists(), 'Failed to delete symlink to folder')
+	def test_copy_file(self):
+		self._test_transfer_file(self._fs.copy, deletes_src=False)
+	def test_move_file(self):
+		self._test_transfer_file(self._fs.move, deletes_src=True)
+	def _test_transfer_file(self, transfer_fn, deletes_src):
+		with TemporaryDirectory() as tmp_dir:
+			src = Path(tmp_dir, 'src')
+			f_contents = '1234'
+			src.write_text(f_contents)
+			dst = Path(tmp_dir, 'dst')
+			transfer_fn(as_url(src), as_url(dst))
+			self.assertTrue(dst.exists())
+			self.assertEqual(f_contents, dst.read_text())
+			if deletes_src:
+				self.assertFalse(src.exists())
+	def test_copy_directory(self):
+		with TemporaryDirectory() as tmp_dir:
+			src = Path(tmp_dir, 'src')
+			src.mkdir()
+			self._create_test_directory_structure(src)
+			dst = Path(tmp_dir, 'dst')
+			self._fs.copy(as_url(src), as_url(dst))
+			self.assertEqual(
+				self._jsonify_directory(src), self._jsonify_directory(dst)
+			)
+	def test_move_directory(self, use_rename=True):
+		with TemporaryDirectory() as tmp_dir:
+			src = Path(tmp_dir, 'src')
+			src.mkdir()
+			self._create_test_directory_structure(src)
+			src_contents = self._jsonify_directory(src)
+			dst = Path(tmp_dir, 'dst')
+			for task in self._fs._prepare_move(
+				as_url(src), as_url(dst), use_rename=use_rename
+			):
+				task()
+			self.assertFalse(src.exists())
+			self.assertEqual(src_contents, self._jsonify_directory(dst))
+	def test_move_directory_without_rename(self):
+		self.test_move_directory(use_rename=False)
+	def _create_test_directory_structure(self, parent_dir):
+		file_1 = parent_dir / 'file.txt'
+		file_txt_contents = '12345'
+		file_1.write_text(file_txt_contents)
+		empty_dir = parent_dir / 'empty'
+		empty_dir.mkdir()
+		dir_ = parent_dir / 'dir'
+		dir_.mkdir()
+		file_2 = dir_ / 'file2.txt'
+		file_2_contents = '6789'
+		file_2.write_text(file_2_contents)
+		subdir = dir_ / 'subdir'
+		subdir.mkdir()
+		file_3 = subdir / 'file_3.txt'
+		file_3_contents = 'Hello!'
+		file_3.write_text(file_3_contents)
+		file_4 = subdir / 'file_4.txt'
+		file_4_contents = 'Hello 2!'
+		file_4.write_text(file_4_contents)
+	def _jsonify_directory(self, dir_):
+		result = {}
+		for f in dir_.iterdir():
+			result[f.name] = \
+				self._jsonify_directory(f) if f.is_dir() else f.read_bytes()
+		return result
+	def test_prepare_move_fails_cleanly(self):
+		"""
+		Consider moving a file from src to dst. When src and dst are on the same
+		drive (as indicated by stat().st_dev having the same value), then a
+		simple os.rename(src, dst) suffices to "move" the file.
+
+		On the other hand, if src and dst are not on the same device, then
+		LocalFileSystem (LFS) needs to 1) copy src to dst and 2) delete src.
+
+		This test checks that 2) is only performed if 1) was successful, and
+		thus that no data loss occurs. It does this by forcing LFS to use the
+		copy-move (and not the rename) implementation. Then, it makes 1) fail by
+		making dst read-only.
+		"""
+		with TemporaryDirectory() as tmp_dir:
+			src = Path(tmp_dir, 'src')
+			# Need to give src some contents. Otherwise, the write to dst goes
+			# through without raising a PermissionError.
+			src.write_text('some_contents')
+			src_url = as_url(src)
+			dst_dir = Path(tmp_dir, 'dst_dir')
+			dst_dir.mkdir()
+			dst = dst_dir / 'dst'
+			dst.touch()
+			# Make dst read-only.
+			dst.chmod(dst.stat().st_mode ^ S_IWRITE)
+			try:
+				permission_error_raised = False
+				for task in self._fs._prepare_move(
+					src_url, as_url(dst), use_rename=False
+				):
+					try:
+						task()
+					except PermissionError:
+						permission_error_raised = True
+				self.assertTrue(
+					permission_error_raised,
+					'PermissionError was not raised upon writing to read-only '
+					'dst. This test may have to be updated to trigger this '
+					'error in a different way.'
+				)
+				self.assertTrue(
+					src.exists(),
+					'LocalFileSystem deleted the source file even though '
+					'copying it to the destination failed. This can lead to '
+					'data loss!'
+				)
+			finally:
+				# Make file writable again. Otherwise cleaning up the temporary
+				# directory fails on Windows.
+				dst.chmod(dst.stat().st_mode | S_IWRITE)
 	def setUp(self):
 		super().setUp()
 		self._fs = LocalFileSystem()
@@ -105,3 +222,5 @@ class TemporaryCwd:
 	def __exit__(self, *_):
 		os.chdir(self._cwd_before)
 		self._tmp_dir.cleanup()
+
+st_dev = namedtuple('fake_statresult', ('st_dev',))
