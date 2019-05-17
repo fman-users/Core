@@ -1664,13 +1664,19 @@ def _get_handler_for_archive(file_name):
 class ArchiveOpenListener(DirectoryPaneListener):
 	def on_command(self, command_name, args):
 		if command_name in ('open_file', 'open_directory'):
+			url = args['url']
 			try:
-				scheme, path = splitscheme(args['url'])
+				scheme, path = splitscheme(url)
 			except (KeyError, ValueError):
 				return None
 			if scheme == 'file://':
 				new_scheme = _get_handler_for_archive(basename(path))
 				if new_scheme:
+					try:
+						if is_dir(url):
+							return None
+					except OSError:
+						return None
 					new_args = dict(args)
 					new_args['url'] = new_scheme + path
 					return 'open_directory', new_args
