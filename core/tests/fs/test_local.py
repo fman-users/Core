@@ -205,6 +205,41 @@ class LocalFileSystemTest(TestCase):
 				# Make file writable again. Otherwise cleaning up the temporary
 				# directory fails on Windows.
 				dst.chmod(dst.stat().st_mode | S_IWRITE)
+	def test_move_across_devices(self):
+		with TemporaryDirectory() as tmp_dir:
+			src_parent = Path(tmp_dir, 'src_parent')
+			src_parent.mkdir()
+			src = src_parent / 'src'
+			src.mkdir()
+			src_file = src / 'file.txt'
+			src_file_contents = 'contents'
+			src_file.write_text(src_file_contents)
+			dst_parent = Path(tmp_dir, 'dst_parent')
+			dst_parent.mkdir()
+			dst = dst_parent / src.name
+			# Pretend that src_parent and dst_parent are on different devices:
+			dst_parent_path = splitscheme(as_url(dst_parent))[1]
+			self._fs.cache.put(dst_parent_path, 'stat', st_dev(object()))
+			# We don't want to just call `self._fs.move(...)` here, for the
+			# following reason: The bug which this test case prevents initially
+			# occurred because `_prepare_move(...)` returned these tasks:
+			#  1) Create `dst`
+			#  2) Move `src_file` into `dst`
+			#  3) Delete `src`
+			# When returning 2), the implementation checks whether `src_file`
+			# and `dst_file` are on the same device. But! At this point, `dst`
+			# (and thus `dst_file`) do not yet exist. So this raised a
+			# FileNotFoundError.
+			# If we did just call `.move(...)`, then 2) would be computed
+			# *after* `dst` was created in 1), thus not triggering the error.
+			# Hence we use list(...) to force 2) to be computed before 1) runs:
+			tasks = list(self._fs.prepare_move(as_url(src), as_url(dst)))
+			for task in tasks:
+				task()
+			self.assertFalse(src.exists())
+			self.assertTrue(dst.exists())
+			dst_file_contents = (dst / src_file.name).read_text()
+			self.assertEqual(src_file_contents, dst_file_contents)
 	def setUp(self):
 		super().setUp()
 		self._fs = LocalFileSystem()

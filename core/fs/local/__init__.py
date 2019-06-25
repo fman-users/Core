@@ -97,13 +97,20 @@ class LocalFileSystem(FileSystem):
 		self._check_transfer_precnds(src_url, dst_url)
 		return self._prepare_move(src_url, dst_url, measure_size=True)
 	def _prepare_move(
-		self, src_url, dst_url, measure_size=False, use_rename=True
+		self, src_url, dst_url, measure_size=False, use_rename=True,
+		expected_st_dev=None
 	):
+		if expected_st_dev is None:
+			expected_st_dev = {}
 		src_path, dst_path = self._check_transfer_precnds(src_url, dst_url)
 		if use_rename:
 			src_stat = self.stat(src_path)
-			dst_dir_dev = self.stat(splitscheme(dirname(dst_url))[1]).st_dev
-			if src_stat.st_dev == dst_dir_dev:
+			dst_par_path = splitscheme(dirname(dst_url))[1]
+			try:
+				dst_par_dev = expected_st_dev[dst_par_path]
+			except KeyError:
+				dst_par_dev = self.stat(dst_par_path).st_dev
+			if src_stat.st_dev == dst_par_dev:
 				yield Task(
 					'Moving ' + basename(src_url), size=1,
 					fn=self._rename, args=(src_url, dst_url)
@@ -114,11 +121,14 @@ class LocalFileSystem(FileSystem):
 			yield Task(
 				'Creating ' + basename(dst_url), fn=self.mkdir, args=(dst_path,)
 			)
+			dst_par_path = splitscheme(dirname(dst_url))[1]
+			# Expect `dst_path` to inherit .st_dev from its parent:
+			expected_st_dev[dst_path] = self.stat(dst_par_path).st_dev
 			for name in self.iterdir(src_path):
 				try:
 					yield from self._prepare_move(
 						join(src_url, name), join(dst_url, name), measure_size,
-						use_rename
+						use_rename, expected_st_dev
 					)
 				except FileNotFoundError:
 					pass
@@ -347,7 +357,8 @@ class DeleteIfEmpty(Task):
 		except OSError as e:
 			if e.errno != errno.ENOTEMPTY:
 				raise
-		self._fs.notify_file_removed(splitscheme(self._dir_url)[1])
+		else:
+			self._fs.notify_file_removed(splitscheme(self._dir_url)[1])
 
 class StubFileSystemWatcher:
 	def addPath(self, path):
