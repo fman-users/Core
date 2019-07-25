@@ -123,7 +123,10 @@ class LocalFileSystem(FileSystem):
 			)
 			dst_par_path = splitscheme(dirname(dst_url))[1]
 			# Expect `dst_path` to inherit .st_dev from its parent:
-			expected_st_dev[dst_path] = self.stat(dst_par_path).st_dev
+			try:
+				expected_st_dev[dst_path] = expected_st_dev[dst_par_path]
+			except KeyError:
+				expected_st_dev[dst_path] = self.stat(dst_par_path).st_dev
 			for name in self.iterdir(src_path):
 				try:
 					yield from self._prepare_move(

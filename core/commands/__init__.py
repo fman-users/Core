@@ -416,7 +416,7 @@ class OpenWithEditor(DirectoryPaneCommand):
 			show_alert('No file is selected!')
 			return
 		url = resolve(url)
-		scheme, path = splitscheme(url)
+		scheme = splitscheme(url)[0]
 		if scheme != 'file://':
 			show_alert(
 				'Editing files from %s is not supported. If you are a plugin '
@@ -426,7 +426,8 @@ class OpenWithEditor(DirectoryPaneCommand):
 			return
 		editor = self._get_editor()
 		if editor:
-			popen_kwargs = strformat_dict_values(editor, {'file': path})
+			file_path = as_human_readable(url)
+			popen_kwargs = strformat_dict_values(editor, {'file': file_path})
 			Popen(**popen_kwargs)
 	def _get_editor(self):
 		settings = load_json('Core Settings.json', default={})

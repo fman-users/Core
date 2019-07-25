@@ -214,6 +214,11 @@ class LocalFileSystemTest(TestCase):
 			src_file = src / 'file.txt'
 			src_file_contents = 'contents'
 			src_file.write_text(src_file_contents)
+			src_subdir = src / 'subdir'
+			src_subdir.mkdir()
+			src_subfile = src_subdir / 'subfile.txt'
+			src_subfile_contents = '1234'
+			src_subfile.write_text(src_subfile_contents)
 			dst_parent = Path(tmp_dir, 'dst_parent')
 			dst_parent.mkdir()
 			dst = dst_parent / src.name
@@ -240,6 +245,9 @@ class LocalFileSystemTest(TestCase):
 			self.assertTrue(dst.exists())
 			dst_file_contents = (dst / src_file.name).read_text()
 			self.assertEqual(src_file_contents, dst_file_contents)
+			dst_subfile = dst / 'subdir' / 'subfile.txt'
+			dst_subfile_contents = dst_subfile.read_text()
+			self.assertEqual(src_subfile_contents, dst_subfile_contents)
 	def setUp(self):
 		super().setUp()
 		self._fs = LocalFileSystem()

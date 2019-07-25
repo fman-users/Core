@@ -96,7 +96,14 @@ class Modified(Column):
 			return ''
 		if mtime is None:
 			return ''
-		mtime_qt = QDateTime.fromMSecsSinceEpoch(int(mtime.timestamp() * 1000))
+		try:
+			timestamp = mtime.timestamp()
+		except OSError:
+			# This can occur in at least Python 3.6 on Windows. To reproduce:
+			#     datetime.min.timestamp()
+			# This raises `OSError: [Errno 22] Invalid argument`.
+			return ''
+		mtime_qt = QDateTime.fromMSecsSinceEpoch(int(timestamp * 1000))
 		time_format = QLocale().dateTimeFormat(QLocale.ShortFormat)
 		# Always show two-digit years, not four digits:
 		time_format = time_format.replace('yyyy', 'yy')
