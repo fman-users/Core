@@ -6,6 +6,11 @@ th {
 	font-size: 8pt;
 }
 
+.locationbar {
+	padding: 0.25ex;
+	border-bottom: 1px solid #262626;
+}
+
 .statusbar {
 	font-size: 8pt;
 }
