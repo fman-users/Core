@@ -72,22 +72,41 @@ class LocalFileSystemTest(TestCase):
 		with TemporaryDirectory() as tmp_dir:
 			path = Path(tmp_dir, 'symlink')
 			path.symlink_to('nonexistent')
-			urlpath = splitscheme(as_url(path))[1]
-			self._fs.stat(urlpath)
+			self._fs.stat(_urlpath(path))
+	def test_samefile(self):
+		this = _urlpath(__file__)
+		pardir = _urlpath(Path(__file__).parent)
+		init = pardir + '/__init__.py'
+		self.assertTrue(self._fs.samefile(this, this))
+		self.assertTrue(self._fs.samefile(pardir, pardir))
+		self.assertTrue(self._fs.samefile(init, init))
+		self.assertFalse(self._fs.samefile(this, pardir))
+		self.assertFalse(self._fs.samefile(this, init))
+		self.assertFalse(self._fs.samefile(pardir, init))
+	def test_samefile_gdrive_file_stream(self):
+		with TemporaryDirectory() as tmp_dir:
+			a = Path(tmp_dir, 'a')
+			a.mkdir()
+			b = Path(tmp_dir, 'b')
+			b.mkdir()
+			a_path = _urlpath(a)
+			b_path = _urlpath(b)
+			self._fs.cache.put(a_path, 'stat', fake_statresult(0, 0))
+			self._fs.cache.put(b_path, 'stat', fake_statresult(0, 0))
+			self.assertFalse(self._fs.samefile(a_path, b_path))
 	def test_delete_readonly_file(self):
 		with TemporaryDirectory() as tmp_dir:
 			path = Path(tmp_dir, 'file')
 			path.touch()
 			path.chmod(path.stat().st_mode ^ S_IWRITE)
-			urlpath = splitscheme(as_url(path))[1]
-			self._fs.delete(urlpath)
+			self._fs.delete(_urlpath(path))
 	def test_delete_symlink_to_directory(self):
 		with TemporaryDirectory() as tmp_dir:
 			a = Path(tmp_dir, 'a')
 			a.mkdir()
 			b = Path(tmp_dir, 'b')
 			b.symlink_to(a)
-			self._fs.delete(splitscheme(as_url(b))[1])
+			self._fs.delete(_urlpath(b))
 			self.assertFalse(b.exists(), 'Failed to delete symlink to folder')
 	def test_copy_file(self):
 		self._test_transfer_file(self._fs.copy, deletes_src=False)
@@ -223,8 +242,9 @@ class LocalFileSystemTest(TestCase):
 			dst_parent.mkdir()
 			dst = dst_parent / src.name
 			# Pretend that src_parent and dst_parent are on different devices:
-			dst_parent_path = splitscheme(as_url(dst_parent))[1]
-			self._fs.cache.put(dst_parent_path, 'stat', st_dev(object()))
+			self._fs.cache.put(
+				_urlpath(dst_parent), 'stat', fake_statresult(object(), 1)
+			)
 			# We don't want to just call `self._fs.move(...)` here, for the
 			# following reason: The bug which this test case prevents initially
 			# occurred because `_prepare_move(...)` returned these tasks:
@@ -266,4 +286,7 @@ class TemporaryCwd:
 		os.chdir(self._cwd_before)
 		self._tmp_dir.cleanup()
 
-st_dev = namedtuple('fake_statresult', ('st_dev',))
+fake_statresult = namedtuple('fake_statresult', ('st_dev', 'st_ino'))
+
+def _urlpath(file_path):
+	return splitscheme(as_url(file_path))[1]

@@ -237,7 +237,15 @@ class LocalFileSystem(FileSystem):
 				raise
 		return as_url(path)
 	def samefile(self, path1, path2):
-		return samestat(self.stat(path1), self.stat(path2))
+		s1 = self.stat(path1)
+		s2 = self.stat(path2)
+		if s1.st_ino and s1.st_dev:
+			return samestat(s1, s2)
+		# samestat(...) above simply compares .st_ino and .st_dev.
+		# However, there are cases where both of these values are 0.
+		# This for instance happens on Windows Google Drive File Stream folders.
+		# Fall back to comparing the (resolved) path to give meaningful results:
+		return self.resolve(path1) == self.resolve(path2)
 	def copy(self, src_url, dst_url):
 		self._check_transfer_precnds(src_url, dst_url)
 		for task in self._prepare_copy(src_url, dst_url):
