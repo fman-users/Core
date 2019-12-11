@@ -4,12 +4,16 @@ from shutil import which
 from subprocess import Popen, check_output
 
 import os
+import sys
 
 def is_arch():
 	try:
 		return _get_os_release_name().startswith('Arch Linux')
 	except FileNotFoundError:
 		return False
+
+def is_mac():
+	return sys.platform == 'darwin'
 
 def get_popen_kwargs_for_opening(files, with_):
 	args = [with_] + files

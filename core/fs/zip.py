@@ -1,5 +1,5 @@
 from collections import namedtuple, deque
-from core.os_ import is_arch
+from core.os_ import is_arch, is_mac
 from core.util import filenotfounderror
 from datetime import datetime
 from fman import PLATFORM, load_json, Task
@@ -16,12 +16,15 @@ import os
 import os.path
 import re
 import signal
+import sys
 
 # Prevent 'Rename' below from accidentally overwriting core.Rename:
 __all__ = ['ZipFileSystem', 'SevenZipFileSystem', 'TarFileSystem']
 
 if is_arch():
 	_7ZIP_BINARY = '/usr/bin/7za'
+elif is_mac() and getattr(sys, 'frozen', False):
+	_7ZIP_BINARY = join(dirname(sys.executable), '7za')
 else:
 	_7ZIP_BINARY = join(
 		dirname(dirname(dirname(__file__))), 'bin', PLATFORM.lower(), '7za'
