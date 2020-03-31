@@ -250,12 +250,17 @@ class FileTreeOperationAT:
 		self._perform_on(src_file, dest_dir='subdir')
 		self._expect_files({'test.txt'}, subdir)
 		self._assert_file_contents_equal(join(subdir, 'test.txt'), '1234')
-	def test_drag_and_drop(self):
+	def test_drag_and_drop_file(self):
 		src_file = join(self.src, 'test.txt')
 		self._touch(src_file, '1234')
-		self._perform_on(src_file, src_dir=None)
+		self._perform_on(src_file)
 		self._expect_files({'test.txt'})
 		self._assert_file_contents_equal(join(self.dest, 'test.txt'), '1234')
+	def test_copy_paste_directory(self):
+		self._touch(join(self.src, 'dir', 'test.txt'))
+		self._makedirs(join(self.dest, 'dir'))
+		self._perform_on(join(self.src, 'dir'))
+		self._expect_files({'test.txt'}, in_dir=join(self.dest, 'dir'))
 	def test_overwrite_directory_file_in_subdir(self):
 		self._touch(join(self.src, 'dir1', 'dir2', 'test.txt'))
 		self._makedirs(join(self.dest, 'dir1', 'dir2'))
@@ -279,12 +284,10 @@ class FileTreeOperationAT:
 	def tearDown(self):
 		self._tmp_dir.cleanup()
 		super().tearDown()
-	def _perform_on(self, *files, dest_dir=None, dest_name=None, src_dir=''):
+	def _perform_on(self, *files, dest_dir=None, dest_name=None):
 		if dest_dir is None:
 			dest_dir = self.dest
-		if src_dir == '':
-			src_dir = self.src
-		op = self.operation(files, dest_dir, src_dir, dest_name, self._fs)
+		op = self.operation(files, dest_dir, dest_name, self._fs)
 		op._dialog = self._progress_dialog
 		op()
 		self._progress_dialog.verify_expected_dialogs_were_shown()
@@ -389,9 +392,7 @@ class MoveFilesTest(FileTreeOperationAT, TestCase):
 		container = join(self.dest, 'container')
 		directory = join(container, 'a')
 		self._makedirs(directory)
-		self._perform_on(
-			directory, src_dir=container, dest_dir=container, dest_name='A'
-		)
+		self._perform_on(directory, dest_dir=container, dest_name='A')
 		self._expect_files({'A'}, in_dir=container)
 	def test_external_file(self):
 		external_file = super().test_external_file()
@@ -425,8 +426,8 @@ class MoveFilesTest(FileTreeOperationAT, TestCase):
 		)
 		self._assert_file_contents_equal(src_file, 'src contents')
 		self._assert_file_contents_equal(dest_file, 'dest contents')
-	def test_drag_and_drop(self):
-		super().test_drag_and_drop()
+	def test_drag_and_drop_file(self):
+		super().test_drag_and_drop_file()
 		self.assertNotIn('test.txt', self._fs.iterdir(self.src))
 	def test_overwrite_directory_file_in_subdir(self):
 		super().test_overwrite_directory_file_in_subdir()

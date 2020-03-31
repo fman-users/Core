@@ -545,8 +545,8 @@ class _TreeCommand(DirectoryPaneCommand):
 		if proceed:
 			dest_dir, dest_name = proceed
 			makedirs(dest_dir, exist_ok=True)
-			self._call(files, dest_dir, src_dir, dest_name)
-	def _call(self, files, dest_dir, src_dir=None, dest_name=None):
+			self._call(files, dest_dir, dest_name)
+	def _call(self, files, dest_dir, dest_name=None):
 		raise NotImplementedError()
 	@classmethod
 	def _confirm_tree_operation(
@@ -698,12 +698,12 @@ def _split(url):
 	return scheme + head, tail
 
 class Copy(_TreeCommand):
-	def _call(self, files, dest_dir, src_dir=None, dest_name=None):
-		submit_task(CopyFiles(files, dest_dir, src_dir, dest_name))
+	def _call(self, files, dest_dir, dest_name=None):
+		submit_task(CopyFiles(files, dest_dir, dest_name))
 
 class Move(_TreeCommand):
-	def _call(self, files, dest_dir, src_dir=None, dest_name=None):
-		submit_task(MoveFiles(files, dest_dir, src_dir, dest_name))
+	def _call(self, files, dest_dir, dest_name=None):
+		submit_task(MoveFiles(files, dest_dir, dest_name))
 
 class DragAndDropListener(DirectoryPaneListener):
 	def on_files_dropped(self, file_urls, dest_dir, is_copy_not_move):

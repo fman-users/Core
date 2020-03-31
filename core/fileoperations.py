@@ -8,8 +8,7 @@ import fman.fs
 
 class FileTreeOperation(Task):
 	def __init__(
-		self, descr_verb, files, dest_dir, src_dir=None, dest_name=None,
-		fs=fman.fs
+		self, descr_verb, files, dest_dir, dest_name=None, fs=fman.fs
 	):
 		if dest_name and len(files) > 1:
 			raise ValueError(
@@ -19,9 +18,9 @@ class FileTreeOperation(Task):
 		self._files = files
 		self._dest_dir = dest_dir
 		self._descr_verb = descr_verb
-		self._src_dir = src_dir
 		self._dest_name = dest_name
 		self._fs = fs
+		self._src_dir = dirname(files[0])
 		self._tasks = []
 		self._num_files = 0
 		self._cannot_move_to_self_shown = False
