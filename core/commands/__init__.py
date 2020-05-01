@@ -10,7 +10,7 @@ from core.quicksearch_matchers import contains_chars, \
 from fman import *
 from fman.fs import exists, touch, mkdir, is_dir, delete, samefile, copy, \
 	iterdir, resolve, prepare_copy, prepare_move, prepare_delete, \
-	FileSystem, prepare_trash, query, makedirs
+	FileSystem, prepare_trash, query, makedirs, notify_file_added
 from fman.impl.util import get_user
 from fman.url import splitscheme, as_url, join, basename, as_human_readable, \
 	dirname, relpath, normalize
@@ -302,7 +302,7 @@ def _open_files(urls, pane):
 		# //192.168.0.2. If the former maps to the latter, then CMD fails to
 		# run .bat files in that location. So only resolve if absolutely
 		# necessary, i.e. when not a file:// URL:
-		if splitscheme(url)[0] != 'file://':
+		if not _is_file_url(url):
 			try:
 				url = resolve(url)
 			except FileNotFoundError:
@@ -325,6 +325,9 @@ def _open_files(urls, pane):
 		# above to get backslashes on Windows:
 		local_file_paths.append(as_human_readable(url))
 	_open_local_files(local_file_paths, pane)
+
+def _is_file_url(url):
+	return splitscheme(url)[0] == 'file://'
 
 def _open_local_files(paths, pane):
 	if PLATFORM == 'Windows':
@@ -725,6 +728,62 @@ class DragAndDropListener(DirectoryPaneListener):
 			is_copy_not_move = True
 		return 'copy' if is_copy_not_move else 'move'
 
+class Symlink(_TreeCommand):
+
+	aliases = ('Symlink', 'Create symbolic link')
+
+	def is_visible(self):
+		if not super().is_visible():
+			return False
+		return _is_file_url(self.pane.get_path()) and \
+			   _is_file_url(_get_opposite_pane(self.pane).get_path())
+
+	def __call__(self):
+		src_url = self.pane.get_path()
+		if not _is_file_url(src_url):
+			self._refuse()
+			return
+		dest_url = _get_opposite_pane(self.pane).get_path()
+		if not _is_file_url(dest_url):
+			self._refuse()
+			return
+		super().__call__()
+
+	def _call(self, files, dest_dir, dest_name=None):
+		ignore_exists = False
+		for i, f_url in enumerate(files):
+			dest_url = join(dest_dir, dest_name or basename(f_url))
+			if not _is_file_url(f_url) or not _is_file_url(dest_url):
+				self._refuse()
+				return
+			f_path = as_human_readable(f_url)
+			dest_path = as_human_readable(dest_url)
+			try:
+				os.symlink(f_path, dest_path, is_dir(f_url))
+			except FileExistsError:
+				if ignore_exists:
+					continue
+				has_more = i < len(files) - 1
+				if has_more:
+					answer = show_alert(
+						"%s exists and cannot be symlinked. Continue?"
+						% basename(f_url),
+						YES | NO | YES_TO_ALL, YES
+					)
+					if answer & YES_TO_ALL:
+						ignore_exists = True
+					elif answer & NO:
+						break
+				else:
+					show_alert(
+						"%s exists and cannot be symlinked." % basename(f_url)
+					)
+			else:
+				notify_file_added(dest_url)
+
+	def _refuse(self):
+		show_alert('Sorry, can only create symlinks between local files.')
+
 class Rename(DirectoryPaneCommand):
 	def __call__(self):
 		file_under_cursor = self.pane.get_file_under_cursor()
@@ -861,7 +920,7 @@ class OpenTerminal(DirectoryPaneCommand):
 class OpenNativeFileManager(DirectoryPaneCommand):
 	def __call__(self):
 		url = self.pane.get_path()
-		scheme, path = splitscheme(url)
+		scheme = splitscheme(url)[0]
 		if scheme != 'file://':
 			if PLATFORM == 'Mac':
 				native_fm = 'Finder'
@@ -1207,7 +1266,7 @@ class InstallLicenseKey(DirectoryPaneCommand):
 		if not url:
 			url = join(curr_dir_url, 'User.json')
 		if not exists(url):
-			if splitscheme(curr_dir_url)[0] == 'file://':
+			if _is_file_url(curr_dir_url):
 				dir_path = as_human_readable(curr_dir_url)
 			else:
 				dir_path = os.path.expanduser('~')
@@ -1772,7 +1831,7 @@ class Minimize(ApplicationCommand):
 class LocationBarListener(DirectoryPaneListener):
 	def on_location_bar_clicked(self):
 		url = self.pane.get_path()
-		if splitscheme(url)[0] == 'file://':
+		if _is_file_url(url):
 			path = as_human_readable(url)
 			self.pane.run_command('go_to', {'query': path})
 			ctrl = 'Cmd' if PLATFORM == 'Mac' else 'Ctrl'
@@ -1822,8 +1881,7 @@ class OpenWith(DirectoryPaneCommand):
 		return files, ''
 	def is_visible(self):
 		pane = self.pane
-		return splitscheme(pane.get_path())[0] == 'file://' \
-			   and pane.get_file_under_cursor()
+		return _is_file_url(pane.get_path()) and pane.get_file_under_cursor()
 
 def _open_files_with_app(files, app):
 	associations = _load_file_associations()
@@ -2085,7 +2143,7 @@ if PLATFORM == 'Mac':
 			if not files:
 				show_alert('No file is selected!')
 				return
-			if any(splitscheme(f)[0] != 'file://' for f in files):
+			if any(not _is_file_url(f) for f in files):
 				show_alert('Sorry, can only preview normal files.')
 				return
 			args = ['qlmanage', '-p']
