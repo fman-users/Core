@@ -1,5 +1,7 @@
 * {
-	font-family: "Roboto Bold";
+	/*font-family: "Roboto Bold"*/
+	font-family: "Roboto Bold", Roboto, Arial;
+	font-weight: bold;
 }
 
 .locationbar {
