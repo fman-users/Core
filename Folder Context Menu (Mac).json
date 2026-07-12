@@ -1,8 +1,0 @@
-[
-	{ "caption": "-", "id": "new" },
-	{ "command": "create_directory" },
-	{ "caption": "-", "id": "properties" },
-	{ "command": "get_info" },
-	{ "caption": "-", "id": "clipboard" },
-	{ "command": "paste" }
-]
